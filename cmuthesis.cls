@@ -79,6 +79,7 @@
 
 \begin{center}
     {\bf Thesis Committee} \\
+    \vspace{0.2cm} \\
     \@committee
 \end{center}
 \vskip 3em
@@ -86,7 +87,7 @@
 \begin{center}
     \em
     Submitted in partial fulfillment of the requirements \\
-    for the degree of Doctor of Philosophy.
+    for the degree of Master of Science.
 \end{center}
 
 
