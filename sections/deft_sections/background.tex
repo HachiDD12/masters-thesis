@@ -1,13 +1,13 @@
-\chapter{Background}
+\section{Background}
 \label{sec:background}
 
-\section{DASH: Dexterous Anthropomorphic Soft Hand}
+\subsection{DASH: Dexterous Anthropomorphic Soft Hand}
 
 Recently introduced, DASH (Dexterous Anthropomorphic Soft Hand)~\citep{mannam2023framework} is a four-fingered anthropomorphic soft robotic hand well-suited for machine learning research use.  We use the DASH hand on the end-effector of our arm for this work. 
 
 The DASH hand's human-like size and form factor allows us to retarget human hand grasps to robot hand grasps easily and perform human-like grasps.  Each finger is actuated by 3 motors connected to string-like tendons, which deform the joints closest to the fingertip (DIP joint), the middle joint (PIP joint), and the joint at the base of the finger (MCP joint).  There is one motor for the finger to move side-to-side at the MCP joint, one for the finger to move forward at the MCP joint, and one for PIP and DIP joints.  The PIP and DIP joints are coupled to one motor and move dependently.  While the motors do not know the end-effector positions of the fingers, we learn a mapping function from pairs of motor angles and visually observed open-loop finger joint angles. These models are used to command the finger joint positions learned from human grasps.  
 
-\section{Retargeting MANO to Soft Hand}
+\subsection{Retargeting MANO to Soft Hand}
 
 In order to use human hand poses as a prior for the end effector joints, we need to first detect hand poses with a model such as MANO \cite{MANO:SIGGRAPHASIA:2017}, and then develop an effective method to retarget it to soft hand joints.
 

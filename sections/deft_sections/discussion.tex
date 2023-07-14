@@ -1,0 +1,12 @@
+\section{Discussion and Limitations}
+\label{sec:discussion}
+
+In this thesis, we investigate how to learn dexterous manipulation in complex setups. \ours aims to learn directly in the real world. In order to efficiently perform real world fine-tuning, we build an \textit{affordance} prior learned from human videos. We are able to practice and improve in the real world via our online fine-tuning approach, enabled by the use of a soft anthropomorphic hand, performing a variety of tasks (involving both rigid and soft objects).
+
+However, there are some limitations to our work.  While we are able to learn policies for the high-dimensional robot hand, the grasps learned are not multi-modal and do not capture all of the different grasps humans are able to perform.  In particular, we find that the predicted hand poses are all power grasps, which is used even in situations where other grasps might be more appropriate (such as a pinch grasp when picking a grape). We believe that this is mainly caused by noisy hand detections. As these detection models improve, we hope to be able to learn a more diverse set of hand grasps. 
+
+Second, during finetuning, resets require human input and intervention. This limits the amount of real-world learning we can do, as the human has to be constantly in the loop to reset the objects. Other works \cite{chen2022single, guptaYuZhaoKumar2021reset} introduce paradigms that might potentially be useful in helping scale our method for more fine-tuning iterations.
+
+Third, the arm has additional physical limitations. While the DASH hand is soft like the human hand, the robot arm is rigid. As a result, the robot cannot mimic \textit{every} grasp humans make. For example, any underhand grasp that involves sliding the hand underneath an object is not possible with this setup because the arm would collide with the table. A soft arm would enable a wider range of human-like grasps.
+
+Finally, the soft hand's fingers do not curl fully. The soft hand's fingers have a tradeoff between the strength and range of motion. The version of the soft hand used for the experiments in this project has high strength, which is useful to pick large, heavier objects. However, this makes grasping smaller objects, such as individual grapes, more difficult. A hand that can have the best of both worlds would facilitate a larger variety of tasks and is a potential area for future research.

@@ -10,16 +10,16 @@
 
 % \draftstamp{\today}{DRAFT}
 
-\begin {document}
+\begin{document}
 \frontmatter
 
 \pagestyle{empty}
 
-\title{{\bf Dexterous Fine-Tuning for Hand Policies}}
+\title{{\bf Learning from Human Videos for Robotic Manipulation}}
 \author{Aditya Kannan}
-\date{August 2023}
+\date{July 2023}
 \Year{2023}
-% \trnumber{CMU-CS-19-109} % TODO
+\trnumber{CMU-CS-23-124}
 
 \committee{
 \begin{tabular}{rl}
@@ -31,12 +31,17 @@ Abhinav Gupta & \textit{Carnegie Mellon University} \\
 \support{}
 \disclaimer{}
 
-\keywords{Dexterous Manipulation, Reinforcement Learning, Learning from Videos} 
+\keywords{Dexterous Manipulation, Reward Learning, Learning from Videos, Deep Learning}
 
 \maketitle
 
 \begin{abstract}
-  Dexterity is often seen as a cornerstone of complex manipulation. Humans are able to perform a host of  skills with their hands, from making food to operating tools. In this paper, we investigate these challenges, especially in the case of soft, deformable objects as well as complex, relatively long-horizon tasks. Although, learning such behaviors from scratch can be data inefficient. To circumvent this, we propose a novel approach,  \ours (\textbf{DE}xterous \textbf{F}ine-\textbf{T}uning for Hand Policies), that leverages human-driven priors, which are executed directly in the real world. In order to \textit{improve} upon these priors, \ours involves an efficient online optimization procedure. With the integration of human-based learning and online fine-tuning, coupled with a soft robotic hand, \ours demonstrates success across various tasks, establishing a robust, data-efficient pathway toward general dexterous manipulation.  Please see our website at \url{https://dexterousfinetuning.github.io} for video results. 
+
+  In recent years, many works in Computer Vision and NLP have demonstrated remarkable steps towards generalization through the collection and use of diverse datasets. However, collecting large-scale robot datasets is often difficult due to many reasons including cost, reliance on human supervision, and safety. An alternative approach is to take advantage of the accessibility and wide variety of human videos available on the internet. In this thesis, we investigate two approaches that use human videos for robotic control without relying on robot demonstrations.
+
+  In our first work, we use human videos as a prior for dexterous manipulation. Humans are able to perform a host of skills with their hands, from making food to operating tools. In this work, we investigate these challenges, especially in the case of soft, deformable objects as well as complex, relatively long-horizon tasks. However, learning such behaviors from scratch can be data inefficient. To circumvent this, we propose a novel approach,  \ours (\textbf{DE}xterous \textbf{F}ine-\textbf{T}uning for Hand Policies), that leverages human-driven priors, which are executed directly in the real world. In order to \textit{improve} upon these priors, \ours involves an efficient online optimization procedure. With the integration of human-based learning and online fine-tuning, coupled with a soft robotic hand, \ours demonstrates success across various tasks, establishing a robust, data-efficient pathway toward general dexterous manipulation.
+
+  In our second work, we introduce a method to learn a domain- and agent-agnostic reward function from large-scale egocentric human data. Prior approaches that use human data for reward learning either require a small sample of in-domain robot data in training or need a goal image specified in the robot's environment. In this work, we focus on the setting where only human data is available at training and test time. Our approach trains a multi-task reward function that learns to disciminate between different tasks by observing the changes in the environment.  We show that our method has strong performance on three simulation tasks \textit{without} the help of robot demonstrations in training or in-domain goals.
   
   \noindent
   The source code for this thesis document is available in open source form at:
@@ -88,7 +93,7 @@ Abhinav Gupta & \textit{Carnegie Mellon University} \\
   research when I was still in high school. Continuing 
   into undergrad, I would like to thank Prof. Hosein 
   Mohimani and Mustafa Guler, whose guidance cemented my 
-  desire to pursue higher studies.
+  desire to pursue master's research.
 
   I would like to thank all the family and friends who 
   have provided me with incredible support, inspiration,
@@ -109,16 +114,21 @@ Abhinav Gupta & \textit{Carnegie Mellon University} \\
 
 \mainmatter
 
-\include{sections/intro}
+\include{sections/introduction}
 
-\include{sections/related_work}
-\include{sections/background}
+\include{sections/deft_sections/intro}
+\include{sections/deft_sections/related_work}
+\include{sections/deft_sections/background}
+\include{sections/deft_sections/method}
+\include{sections/deft_sections/experimental_setup}
+\include{sections/deft_sections/results}
+\include{sections/deft_sections/discussion}
 
-\include{sections/method}
-\include{sections/experimental_setup}
-
-\include{sections/results}
-\include{sections/discussion}
+\include{sections/reward_sections/intro}
+\include{sections/reward_sections/related_work}
+\include{sections/reward_sections/method}
+\include{sections/reward_sections/results}
+\include{sections/reward_sections/conclusion}
 
 \chapter*{Bibliography}
 \addcontentsline{toc}{chapter}{Bibliography}

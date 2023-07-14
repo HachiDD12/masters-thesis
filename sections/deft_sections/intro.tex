@@ -1,4 +1,7 @@
-\chapter{Introduction}
+\chapter{Dexterous Fine-Tuning for Hand Policies}
+\label{cha:deft}
+
+\section{Introduction}
 \label{sec:intro}
 
 \begin{figure}[H]
@@ -10,7 +13,7 @@
 \end{figure}
 
 
-The longstanding goal of robot learning is to build robust agents that can perform long-horizon tasks autonomously. This could for example mean a self-improving robot that can build furniture or an agent that can cook for us. A key aspect of most tasks that humans would like to perform is that they require complex motions that are often only achievable by hands - consider the task of tying shoelaces. Such a task would be impossible with a parallel jaw gripper. Therefore, in this thesis, we investigate real-world dexterous manipulation, its challenges, and its deployment in the real world. 
+The longstanding goal of robot learning is to build robust agents that can perform long-horizon tasks autonomously. This could for example mean a self-improving robot that can build furniture or an agent that can cook for us. A key aspect of most tasks that humans would like to perform is that they require complex motions that are often only achievable by hands--consider the task of tying shoelaces. Such a task would be impossible with a parallel jaw gripper. Therefore, in this work, we investigate real-world dexterous manipulation, its challenges, and its deployment in the real world. 
 
 A key challenge in deploying  policies in the real world, especially with robotic hands, is that there exist many failure modes. Controlling a dexterous hand is much harder than end-effectors due to larger action spaces and complex dynamics. This problem becomes even more difficult when contacts with objects are more involved, as there can be many points of contact on a robotic hand. To address this, one option is to \textit{improve} directly in the real world via \textit{practice}. Traditionally, reinforcement learning (RL) and imitation learning (IL) techniques have been used to deploy hands-on tasks such as in-hand rotation or grasping. To be proficient at any skill a lot of practice or data is needed. This is often the case as setups are often built so that it is either easy to simulate in the real world or robust to practice. However, the real world contains tasks that one cannot simulate (such as manipulation of soft objects like food) or difficult settings in which the robot cannot practice (sparse long-horizon tasks like assembly). How can we build an approach that can scale to such tasks? 
 

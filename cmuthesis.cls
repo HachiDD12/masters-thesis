@@ -57,7 +57,7 @@
 \begin{center}
 {\Large \strut \@title\par}
 \vfill
-{\large \begin{tabular}[t]{c}\@author\end{tabular}\par}
+{\large \begin{tabular}[t]{c}{\bf \@author}\end{tabular}\par}
 \vfill
 {\sc \@trnumber\par}
 \smallskip
