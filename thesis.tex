@@ -22,9 +22,9 @@
 \trnumber{CMU-CS-23-124}
 
 \committee{
-\begin{tabular}{rl}
-Deepak Pathak, Chair & \textit{Carnegie Mellon University} \\
-Abhinav Gupta & \textit{Carnegie Mellon University} \\
+\begin{tabular}{c}
+    Prof. Deepak Pathak, Chair \\
+    Prof. Abhinav Gupta \\
 \end{tabular}
 }
 
@@ -37,14 +37,14 @@ Abhinav Gupta & \textit{Carnegie Mellon University} \\
 
 \begin{abstract}
 
-  In recent years, many works in Computer Vision and NLP have demonstrated remarkable steps towards generalization through the collection and use of diverse datasets. However, collecting large-scale robot datasets is often difficult due to many reasons including cost, reliance on human supervision, and safety. An alternative approach is to take advantage of the accessibility and wide variety of human videos available on the internet. In this thesis, we investigate two approaches that use human videos for robotic control without relying on robot demonstrations.
+  In recent years, many works in Computer Vision and NLP have demonstrated remarkable steps toward generalization through the collection and use of diverse datasets. However, collecting large-scale robot datasets is often difficult due to many reasons including cost, reliance on human supervision, and safety. An alternative approach is to take advantage of the accessibility and wide variety of human videos available on the internet. In this thesis, we investigate two approaches that use human videos for robotic control without relying on robot demonstrations.
 
   In our first work, we use human videos as a prior for dexterous manipulation. Humans are able to perform a host of skills with their hands, from making food to operating tools. In this work, we investigate these challenges, especially in the case of soft, deformable objects as well as complex, relatively long-horizon tasks. However, learning such behaviors from scratch can be data inefficient. To circumvent this, we propose a novel approach,  \ours (\textbf{DE}xterous \textbf{F}ine-\textbf{T}uning for Hand Policies), that leverages human-driven priors, which are executed directly in the real world. In order to \textit{improve} upon these priors, \ours involves an efficient online optimization procedure. With the integration of human-based learning and online fine-tuning, coupled with a soft robotic hand, \ours demonstrates success across various tasks, establishing a robust, data-efficient pathway toward general dexterous manipulation.
 
-  In our second work, we introduce a method to learn a domain- and agent-agnostic reward function from large-scale egocentric human data. Prior approaches that use human data for reward learning either require a small sample of in-domain robot data in training or need a goal image specified in the robot's environment. In this work, we focus on the setting where only human data is available at training and test time. Our approach trains a multi-task reward function that learns to disciminate between different tasks by observing the changes in the environment.  We show that our method has strong performance on three simulation tasks \textit{without} the help of robot demonstrations in training or in-domain goals.
+  In our second work, we introduce a method to learn a domain- and agent-agnostic reward function from large-scale egocentric human data. Prior approaches that use human data for reward learning either require a small sample of in-domain robot data in training or need a goal image specified in the robot's environment. In this work, we focus on the setting where only human data is available at training and test time. Our approach trains a multi-task reward function that learns to discriminate between different tasks by observing the changes in the environment.  We show that our method has strong performance on three simulation tasks \textit{without} the help of robot demonstrations in training or in-domain goals.
   
   \noindent
-  The source code for this thesis document is available in open source form at:
+  The source code for this thesis document is available at:
   \begin{center}
   \url{https://github.com/adityak77/masters-thesis}
   \end{center}
@@ -53,9 +53,9 @@ Abhinav Gupta & \textit{Carnegie Mellon University} \\
 % \newgeometry{left=0.5in,right=0.5in,top=1in,bottom=1.4in}
 \begin{acknowledgments}
   I have been incredibly fortunate and grateful to have 
-  received the opportunity to pursue the work that comprises
+  received the opportunity to pursue
   my thesis. To the countless mentors, friends, and
-  family who invested in my growth and encouraged me to be
+  family who invested in me and encouraged me to be 
   bold, I dedicate this work to you.
 
   First, I would like to thank Prof. Deepak Pathak, my 
@@ -69,7 +69,7 @@ Abhinav Gupta & \textit{Carnegie Mellon University} \\
 
   I would especially like to thank Shikhar Bahl for his
   guidance and mentorship throughout my time in the lab. 
-  I am grateful for his advice, encouragement and his role
+  I am grateful for his advice, encouragement, and his role
   in helping me become more independent in my research.
 
   I would also like to thank my collaborators, friends, 
@@ -82,7 +82,7 @@ Abhinav Gupta & \textit{Carnegie Mellon University} \\
   Shagun Uppal, Haoyu Xiong, and Yufei Ye.
 
   I am privileged to have had countless mentors early in
-  my life who set me upon the path I am today. This 
+  my life who set me on the path I am today. This 
   includes my middle school teacher Jack Black, who 
   instilled in me a strong work ethic, and my high school 
   physics teacher Michael O'Byrne, who taught me to always
@@ -92,7 +92,7 @@ Abhinav Gupta & \textit{Carnegie Mellon University} \\
   and giving me the opportunity to actively work on 
   research when I was still in high school. Continuing 
   into undergrad, I would like to thank Prof. Hosein 
-  Mohimani and Mustafa Guler, whose guidance cemented my 
+  Mohimani, whose guidance cemented my 
   desire to pursue master's research.
 
   I would like to thank all the family and friends who 

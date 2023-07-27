@@ -1,7 +1,7 @@
 \section{Results}
 \label{sec:results}
 
-We performs a variety of experiments to answer the following questions:  1) How good is our affordance model? 2) How well can \ours learn and improve in the real world? 3) How can the experience collected by \ours be distilled into a policy? 4) How can \ours be used for complex, soft object manipulation? We investigate the role of the affordance model and real-world fine-tuning in Table~\ref{tab:main} and Figure~\ref{fig:graph_main}. Then we perform a series of ablations in Table~\ref{tab:abl}.
+We perform a variety of experiments to answer the following questions:  1) How good is our affordance model? 2) How well can \ours learn and improve in the real world? 3) How can the experience collected by \ours be distilled into a policy? 4) How can \ours be used for complex, soft object manipulation? We investigate the role of the affordance model and real-world fine-tuning in Table~\ref{tab:main} and Figure~\ref{fig:graph_main}. Then we perform a series of ablations in Table~\ref{tab:abl}.
 
 \begin{table}[H]
     \centering
@@ -23,14 +23,14 @@ We performs a variety of experiments to answer the following questions:  1) How 
         \end{tabular}
     }
     \vspace{0.05in}
-    \caption{We present the results of our method as well as compare them to other baselines: Real-world learning without internet priors used as guidance and the affordance model outputs without real-world learning.  Together, our method is able to better complete these tasks.}
+    \caption{We present the results of our method as well as compare them to other baselines: Real-world learning without internet priors used as guidance as well as the affordance model outputs without real-world learning.  Together, our method is able to better complete these tasks.}
     \label{tab:main}
 \end{table}
 
 
 
 \subsection{Effect of affordance prior} 
-The human affordance model predicted three items: the contact location, the wrist grasp rotation, and and the hand joint pose. In the Real-World Only model, we use a few heuristics in place of each item in the affordance prior and proceed with fine-tuning. For contact location, we detect the object in the scene using a popular object detection model \cite{kirillov2023segment} and let the contact location prior be the center of the bounding box. For the wrist rotation, use a generic rotation with the pal of the hand facing downward. Finally, for the hand joint angles, we fix a half-closed hand as the grasp pose prior.  
+The human affordance model predicted three items: the contact location, the wrist grasp rotation, and the hand joint pose. In the Real-World Only model, we use a few heuristics in place of each item in the affordance prior and proceed with fine-tuning. For contact location, we detect the object in the scene using a popular object detection model \cite{kirillov2023segment} and let the contact location prior be the center of the bounding box. For the wrist rotation, use a generic rotation with the palm of the hand facing downward. Finally, for the hand joint angles, we fix a half-closed hand as the grasp pose prior.  
 
 With these heuristics, the robot has difficulty finding stable grasps consistently across a range of tasks. While the robot is able to navigate to the object, the main obstacle was finding the correct rotation angle for the hand. Hand rotation is very important for many tool manipulation tasks because it requires not only picking the tool but also grasping in a stable manner. While the soft hand shows decent success in grasping a spoon (where the grasp rotation from the heuristic is close to the correct grasp rotation) it is not able to perform well in tasks that require other wrist rotations.
 
@@ -51,7 +51,7 @@ It is possible that with more exploration the Real-World Only model would be abl
 \subsection{Zero-shot model execution} 
 We explore the zero-shot performance of our prior with the Affordance Only model.  Without applying any online fine-tuning to our affordance model, we rollout the trajectory parameterized by the prior.  While our model performs decent on simpler tasks, the model struggles on tasks like stir and scoop that require strong, power grasps (shown in Table~\ref{tab:main}). In these tasks, the spoon collides with other objects, so fine-tuning the prior to hold the back of the spoon is important in maintaining a reliable grip throughout the post-grasp motion. Because \ours incorporates real-world experience with the prior, it is able to sample contact locations and grasp rotations that can better execute the task. 
 
-One observation we found is that our zero-shot model sometimes performs better than the residual model trained on the first ten CEM iterations. This is due to \ours optimizing the grasp parameters only after ten iterations. Our first residual model learns only from random noise, explaining why our zero-shot performance can be stronger than \ours after few iterations of fine-tuning.
+One observation we found is that our zero-shot model sometimes performs better than the residual model trained on the first ten CEM iterations. This is due to \ours optimizing the grasp parameters only after ten iterations. Our first residual model learns only from random noise, explaining why our zero-shot performance can be stronger than \ours after a few iterations of fine-tuning.
 
 
 \begin{figure}[t]
@@ -97,7 +97,7 @@ We use the final image collected in the single post-grasp human demonstration fr
 \end{table}
 
 
-\subsection{Model Architecture} We investigate different models and training architectures for the policy trained on the rollouts (Table~\ref{tab:abl}). When we replace the conditional VAE with an MLP that predicts residuals, the model has difficulty learning the grasp rotation to effectively pour a cup. This may be because VAEs can compress multi-modal data more effectively (which is useful for our case as our data includes location, rotation, and joint angles).
+\subsection{Model Architecture} We investigate different models and training architectures for the policy trained on the rollouts (Table~\ref{tab:abl}). When we replace the conditional VAE with an MLP that predicts residuals, the model has difficulty learning the grasp rotation to effectively pour a cup. This may be because VAEs can compress multi-modal data more effectively (which is useful for our case as our inputs includes location, rotation, and joint angles).
 
 Our transformer ablation is an offline method similar to \cite{chen2021decisiontransformer} where in addition to the image and affordance model outputs, we condition on the reward outputs and train a transformer to predict the residual. At test time the maximum reward is queried and the output is used in the rollout. We hypothesize that the reduced performance is because the transformer is a data-hungry architecture. The model may need more real-world data, which can be expensive to collect.
 
@@ -119,4 +119,4 @@ Finally, we train a VAE to directly estimate $\xi$ instead of the residual. This
 \subsection{Performance on complex tasks and soft objects} 
 We investigate the performance of \ours on more challenging tasks, which involve grasping or manipulating food. Tasks involving soft objects cannot be simulated accurately, so sim2real methods may have difficulty performing these tasks in the real world. Our method does not have that challenge in this setting and \ours is able to perform reasonably well on these tasks.
 
-Of the three tasks, our method has the most difficulty with the Pick Grape task. This is because grapes are small and require the fingers to curl fully to maintain a stable grasp. A limitation of our hand is that the range of MCP joint does not allow the fingertips to touch its palm, and as a result it has difficulty in consistently picking small objects.
+Of the three tasks, our method has the most difficulty with the Pick Grape task. This is because grapes are small and require the fingers to curl fully to maintain a stable grasp. A limitation of our hand is that the range of MCP joint does not allow the fingertips to touch its palm, and as a result, it has difficulty in consistently picking small objects.

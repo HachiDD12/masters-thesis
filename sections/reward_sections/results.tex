@@ -1,7 +1,7 @@
 \section{Experiments}
 \label{sec:experiments_reward}
 
-Our experiments aim to answer the following questions: (1) How effectively does our method perform without any prior knowledge of robot embodiment or robot demonstrations? (2) How does our method compare to previous work? (3) Does domain augmentation improve simulation performance? (4) Does our method improve when trained on additional tasks?
+Our experiments aim to answer the following: (1) How effectively does our method perform without any prior knowledge of robot embodiment or robot demonstrations? (2) How does our method compare to previous work? (3) Does domain augmentation improve simulation performance? (4) Does our method improve when trained on additional tasks?
 
 \begin{figure}[H]
 \centering
@@ -14,20 +14,18 @@ Our experiments aim to answer the following questions: (1) How effectively does 
 
 \subsection{Comparison to Prior Work}
 
-% First, we wish to answer the following question: \textbf{how does prior work fare when training only on human videos}? In particular, we want to compare methods that learn reward or distance functions and use only human demos at test time.
-
 We use two prior works as baselines: DVD \cite{DVD} and VIP \cite{VIP}. DVD's results involve training on both human and robot videos, so we hypothesize that training only on human videos is not sufficient for learning policies for robots at test time. The DVD reward function does not generalize to unseen robot embodiments. Methods like VIP that pretrain on diverse human datasets generate a reward that represents a distance function to a goal image in the robot's environment. However, we only produce human demonstrations at test time, so we hypothesize this approach will not work well either.
 
 Our results for these baseline methods are in Table \ref{table:baseline_comparison_reward}. The methods we show results for are as follows:
 
 \begin{itemize}
-    \item \verb|Shaped Reward|: A human-specified reward function that is manually shaped for each task.
+    \item \verb|Shaped Reward|: A human-specified reward function that is shaped for each task.
     \item \verb|DVD-HR|: The original implementation of DVD, trained on both human and in-domain robot demonstrations.
     \item \verb|DVD-H|: A modified version of DVD that is limited to training on only human data.
     \item \verb|VIP|: Using VIP with a goal image from an OOD human video at test time.
 \end{itemize}
 
-In the first two rows, privileged information is available for the reward function (either a manually shaped reward or robot demonstrations are available). When DVD does not have access to in-domain robot data, there is a significant decline in performance in the zero-shot setting. The DVD model struggles to learn a reward function that can transfer to the robot's environment without robot demonstrations. In practice, we see that it only performs one task, even when given demos of other tasks. VIP also does not perform well because it requires goal image in the robot's setting.
+In the first two rows, privileged information is available for the reward function (either a manually shaped reward or robot demonstrations are available). When DVD does not have access to in-domain robot data, there is a significant decline in performance in the zero-shot setting. The DVD model struggles to learn a reward function that can transfer to the robot's environment without robot demonstrations. In practice, we see that it only performs one task, even when given demos of other tasks. VIP also does not perform well because it requires a goal image in the robot's setting.
 
 The results of our method are also depicted in Table~\ref{table:baseline_comparison_reward}. We present our method with and without visual domain augmentation. Both reward functions perform strongly on all three tasks despite not having seen the environment in the training data or at test time. Our method performs significantly better than DVD-H and VIP in the zero-shot setting. Our method even outperforms DVD-HR on two of the three tasks. Overall, we believe that removing the agent encourages the representations learned by our method to more accurately match the functional meaning of the task by focusing on the changes in the environment. Accordingly, our method can perform better than models like DVD-HR.
 
@@ -51,9 +49,10 @@ The results of our method are also depicted in Table~\ref{table:baseline_compari
         \bottomrule
         \end{tabular}
     }
-    \vspace{0.05in}
     \caption{Fraction of successful iterations for each model with varying data used at training and test time. Each model was averaged over 10 different seeds, each seed being run for 100 CEM iterations.}
     \label{table:baseline_comparison_reward}
+
+    \vspace{-0.3cm}
 \end{table}
 
 \subsection{Effect of visual domain augmentation}
@@ -94,7 +93,7 @@ More aggressive augmentation could potentially improve the amount of generalizat
         \end{tabular}
     }
     \vspace{0.05in}
-    \caption{Fraction successful iterations for reward models trained with varying number of tasks.}
+    \caption{Fraction of successful iterations for reward models trained with a varying number of tasks.}
     \label{table:more_tasks_reward}
 \end{table}
 
@@ -103,6 +102,6 @@ The results that we described in the previous section involve training on 6 task
 
 To investigate this, we additionally train a reward function with our method with 3 tasks, 13 tasks, and 20 tasks. All of these variations include the three evaluation tasks in the training set. We evaluate the 4 reward functions with the three original evaluation tasks. We show these results in Figure~\ref{fig:graph_task_ablation_reward}. We also show results comparing our method with 6 task training and 20 task training on 3 additional evaluation tasks in Table~\ref{table:more_tasks_reward}.
 
-Based on the results in Figure~\ref{fig:graph_task_ablation_reward}, we find that scaling to more tasks in training produces better performance and generalization up to a point. Perhaps the reason the 3-task model performs worse than the 6-task reward function is that there are fewer total videos for training. While both models are trained for the same number of epochs, the number of videos in each epoch is smaller for the model trained with three tasks.
+Based on the results in Figure~\ref{fig:graph_task_ablation_reward}, we find that scaling to more tasks in training produces better performance and generalization up to a point. The 3-task reward function performs worse than the 6-task reward function is that there are fewer total videos for training. While both models are trained for the same number of epochs, the number of videos in each epoch is smaller for the model trained with three tasks.
 
-However, after 6 tasks, the success rate plateaus and decreases when going to 13 and then 20 training tasks. This is reflected even more in Table~\ref{table:more_tasks_reward} where the 20-task model performs worse on all 6 evaluation tasks. This is probably due to the structure of the reward model: as the discriminator needs to be able to distinguish between more tasks, it might struggle to disambiguate the salient features for the evaluation tasks compared to the other tasks it is trained on. As a result, our method loses robustness when training on \textit{too many} unrelated tasks.
+However, after 6 tasks, the success rate plateaus and decreases when going to 13 and then 20 training tasks. This is additionally reflected in Table~\ref{table:more_tasks_reward} where the 20-task model performs worse on all 6 evaluation tasks. This is likely due to the structure of the reward model: as the discriminator needs to be able to distinguish between more tasks, it might struggle to disambiguate the salient features for the evaluation tasks compared to the other tasks it is trained on. As a result, our method loses robustness when training on \textit{too many} unrelated tasks.

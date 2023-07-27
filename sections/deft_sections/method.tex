@@ -10,7 +10,7 @@
  \vspace{-0.15in}
 \end{figure}
 
-The goal of \ours is to learn useful, dexterous manipulation in the real world that can generalize to many objects and scenarios.  \ours learns in the real-world and fine-tunes robot hand-to-object interaction in the real world using only a few samples. However, without any priors on what is useful behavior, the robot will explore the action space inefficiently. Especially with a high-dimensional robotic hand, we need a strong prior to effectively explore the real world. We train an affordance model on human videos to learn what are reasonable behaviors the robot should perform.  
+The goal of \ours is to learn useful, dexterous manipulation in the real world that can generalize to many objects and scenarios.  \ours learns in the real world and fine-tunes robot hand-to-object interaction using only a few samples. However, without any priors on what is useful behavior, the robot will explore the action space inefficiently. Especially with a high-dimensional robotic hand, we need a strong prior to effectively explore the real world. We train an affordance model on human videos to learn what are reasonable behaviors the robot should perform.  
 
 \subsection{Learning grasping affordances}
 \begin{figure}[t]
@@ -61,7 +61,7 @@ At test time, we generate a crop of the object using Segment-Anything \cite{kiri
 \vspace{-0.3in}
 \begin{minipage}{\linewidth}
 \begin{algorithm}[H]
-\caption{\small Fine-Tuning Procedure for \ours}\label{alg:cap}
+\caption{Fine-Tuning Procedure for \ours}\label{alg:cap}
 \begin{algorithmic}
 \small
 \REQUIRE Task-conditioned affordance model $f$, task description $T$, post-grasp trajectory $\tau$, residual policy $\pi$. $E$ number of elites, $M$ number of warm-up episodes, $N$ total iterations. 
@@ -90,6 +90,6 @@ At test time, we generate a crop of the object using Segment-Anything \cite{kiri
 
 The affordance prior allows the robot to narrow down its learning behavior to a small subset of all possible behaviors. However, these affordances are not perfect and the robot will oftentimes still not complete the task.  This is partially due to morphology differences between the human and robot hands, inaccurate detections of the human hands, or differences in the task setup. In order to improve upon this, we practice in an online fashion to optimize the learned skills. 
 
-Let the grasp location, wrist rotation and grasp pose, as well as the trajectory from our affordance prior be $\xi$. During training we sample noise $\epsilon \sim \mathcal{D}$ where $\mathcal{D}$ is initialized to $\mathcal{N}(0, \sigma^2)$ (for a small $\sigma$). We rollout a trajectory parameterized by $\xi + \epsilon$. We collect $R_i$, the reward for each $\xi_i = f(v_i) + \epsilon_i$ where $v_i$ is the image.  After an initial number of $M$ warmup episodes, we rank the rollouts based on $R_i$ and extract sampled noise from the elite trajectories $\{ \epsilon_{i_1}, \epsilon_{i_2}, \dots, \epsilon_{i_k} \}$. We fit $\mathcal{D}$ to the elite trajectories to improve the sampled noise. 
+Let the grasp location, wrist rotation, and grasp pose, as well as the trajectory from our affordance prior be $\xi$. During training we sample noise $\epsilon \sim \mathcal{D}$ where $\mathcal{D}$ is initialized to $\mathcal{N}(0, \sigma^2)$ (for a small $\sigma$). We rollout a trajectory parameterized by $\xi + \epsilon$. We collect $R_i$, the reward for each $\xi_i = f(v_i) + \epsilon_i$ where $v_i$ is the image.  After an initial number of $M$ warmup episodes, we rank the rollouts based on $R_i$ and extract sampled noise from the elite trajectories $\{ \epsilon_{i_1}, \epsilon_{i_2}, \dots, \epsilon_{i_k} \}$. We fit $\mathcal{D}$ to the elite trajectories to improve the sampled noise. 
 
 At test time, we could take the mean values of the top $N$ trajectories for the rollout policy.  However, this does not account for the appearance of different objects, previously unseen object configurations, or other properties in the environment. To account for this, we train a VAE \cite{SohnNIPS2015, rezende2014stochastic, rezende2014vae, kingma2013vae} to output residuals $\delta_j$ conditioned on an encoding of the initial image $\phi(I_{j, 0})$ and affordance model outputs $\xi_j$ from the top ten trajectories. We train an encoder $q(z | \delta_j, c_j)$ where $c_j = (\phi(I_{j, 0}), \xi_j)$, as well as a decoder $p(\delta_j | z, c_j)$. At test time, our residual policy $\pi (I_0, \xi)$ samples $z \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$ and predicts $\hat{\delta} = p(z, (I_0, \xi))$. Then we rollout the trajectory determined by the parameters $\xi + \hat{\delta}$.
