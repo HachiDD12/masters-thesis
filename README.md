@@ -1,5 +1,6 @@
-# Differentiable Optimization-Based Modeling for Machine Learning
+# Learning from Human Videos for Robotic Manipulation
 
+<!---
 + This repository is by [Brandon Amos](http://bamos.github.io)
   and contains the full source code and data to produce
   [my thesis document](https://github.com/bamos/thesis/raw/master/bamos_thesis.pdf).
@@ -165,3 +166,4 @@ The BibTeX for this document is:
   month        = May,
 }
 ```
+-->
