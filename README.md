@@ -1,6 +1,6 @@
 # Learning from Human Videos for Robotic Manipulation
 
-This repository contains the full source code for [Aditya Kannan's](adityak77.github.io) Master's Thesis [document](http://reports-archive.adm.cs.cmu.edu/anon/2023/abstracts/23-124.html).
+This repository contains the full source code for [Aditya Kannan](https://adityak77.github.io/)'s Master's Thesis [document](http://reports-archive.adm.cs.cmu.edu/anon/2023/abstracts/23-124.html).
 
 
 ## Publications behind this thesis
