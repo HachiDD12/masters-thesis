@@ -1,0 +1,9 @@
+\chapter{Cached Context}
+\label{cha:ch3}
+
+\myx{Please ping me when you are done with this chapter.}
+
+\section{Introduction}
+\label{sec:ch3_intro}
+
+As we have identified the existence of \textbf{Challenge 1} (poor patch quality due to incomplete context) and \textbf{Challenge 2} (slow generation due to long context) in modern agentic systems, it is therefore natural to consider designing an end-to-end system that aims at tackling both challenges. In the previous chapters, we evaluated the performance of modern solutions for each respective challenge, which are RepoGraph \cite{ouyang2025repographenhancingaisoftware} and CacheBlend \cite{yao2025cacheblendfastlargelanguage}. RepoGraph extracts repository-level context via pre-generating a structure tree containing symbol locations and a code graph containing call relations. CacheBlend enables position-independent KV cache full reuse by selectively recomputes a small subset of high-KV-deviation tokens to restore cross-attention.

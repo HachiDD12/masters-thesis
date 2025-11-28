@@ -1,0 +1,10 @@
+\section{Design}
+\label{sec:ch3_design}
+New adapter module:
+
+Consumes prompts created from modified templates (with blend special string to delimit chunks), then extracts and stitches chunks with model's tokenizer, and passes the final forged prompt to LMCache (i.e. CacheBlend's system) for KV cache prefilling with blend enabled.
+
+This allows flexible chunking granularity simply based on where blend special string is inserted in the frontend prompt template. For example, if chunking is based on context per file/per symbol, the frontend algo can add a blend special string after each of the context snippet fetched during code graph exploration. If on a granularity that is coarser, say per context block (e.g. issue description, repo structure, relevant code), it is also achievable through directly placing the string in frontend prompt after each block.
+
+\section{Implementation}
+\frank{mention tweaks on repograph and context retrieval for copilot arena here}
