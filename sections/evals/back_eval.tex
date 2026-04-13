@@ -1,0 +1,15 @@
+\section{Latency Evaluation for KV Reuse}
+\label{sec:ch2_eval}
+\subsection{Setup}
+\subsubsection{Metric}
+Average time per request (or avg. time per issue or patch)
+
+Or use TTFT/Prefill, explaination see \url{https://docs.vllm.ai/en/latest/design/metrics.html#engine-core-events}
+
+\subsubsection{Datasets}
+
+prompts produced by RepoGraph, using SWE-bench Verified-mini
+
+\subsubsection{Baselines}
+SGLang, vLLM, vLLM w/o prefix-caching
+\subsection{Results}
