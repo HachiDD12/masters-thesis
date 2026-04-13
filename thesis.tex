@@ -1,6 +1,6 @@
 \PassOptionsToPackage{svgnames,dvipsnames}{xcolor}
 
-\documentclass[12pt,openany]{cmuthesis}
+\documentclass[12pt]{cmuthesis}
 
 \usepackage[Lenny]{fncychap}
 \ChNameVar{\Large}
@@ -53,7 +53,6 @@ Recent advances in Large Language Models (LLMs) have enabled the development of 
 % \listoftables
 % \listofalgorithms
 
-\raggedbottom
 \mainmatter
 
 \include{sections/introduction}
@@ -63,8 +62,10 @@ Recent advances in Large Language Models (LLMs) have enabled the development of 
 \include{sections/design}
 
 
-\include{sections/evals/back_eval}
 \include{sections/evals/front_eval}
+\include{sections/evals/back_eval}
+\include{sections/evals/e2e_perf_eval}
+\include{sections/evals/e2e_lat_eval}
 
 \chapter*{Bibliography}
 \addcontentsline{toc}{chapter}{Bibliography}

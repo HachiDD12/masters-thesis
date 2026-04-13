@@ -1,0 +1,1 @@
+- [Always rebuild after tex changes](feedback_rebuild_after_changes.md) — Run make after every .tex edit and check for build errors
