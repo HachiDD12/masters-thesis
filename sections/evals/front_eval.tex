@@ -1,12 +1,10 @@
 \chapter{Evaluations}
 \label{cha:eval}
 {\colorGreen
-To gain a thorough understanding of the effectiveness of our preliminary end-to-end agent system, we ran four sets of evaluations as follows.
+To evaluate the effectiveness of our system, we conduct two sets of evaluations:
 \begin{itemize}
-    \item Performance evaluation of RepoGraph, the frontend context retrieval algorithm, across models of difference sizes and specialties. This is to see consistency, robustness and portability of the Algorithm when under resource constraints and/or the backend model's reasoning capability is limited.
-    \item Latency evaluation for CacheBlend, the backend KV cache reuse module, specially under agentic workloads. This differentiates from original work's evaluations with QA and text-based RAG workloads, and is critical for understanding the applicability of the caching scheme.
-    \item Performance evaluation of the end-to-end system \frank{this does not exist yet, blending seem to affect output accuracy drastically, working on a fix}
-    \item Latency evaluation of the end-to-end system \frank{also DNE yet, given latency improvement issue not resolved}
+    \item Performance evaluation of RepoGraph, the frontend context retrieval algorithm, across models of different sizes and specialties. This assesses the consistency, robustness, and portability of the algorithm when under resource constraints and/or the backend model's reasoning capability is limited. We additionally evaluate the impact of CacheBlend's KV cache reuse on output quality.
+    \item Latency evaluation for CacheBlend, the backend KV cache reuse module, specifically under agentic workloads. This differentiates from the original work's evaluations with QA and text-based RAG workloads, and is critical for understanding the applicability of the caching scheme in agentic settings.
 \end{itemize}}
 
 
@@ -44,9 +42,20 @@ Finally, cross-backend evaluation provides practical benefits for deployment. Si
 
 \begin{figure}[ht]
 \centering
-\includegraphics[width=\linewidth]{graphs/visualized_eval_mini_results_all.png}
+\includegraphics[width=0.75\linewidth]{graphs/v0_plots/visualized_eval_mini_results_all.png}
 \vspace{-0.2in}
   \caption{\small Full results distributions for SWE-bench Verified-mini evaluation runs across different models.}
  \label{fig:repograph_api_perf}
+ \vspace{-0.15in}
+\end{figure}
+
+To further assess whether CacheBlend's KV cache reuse affects output quality, we run an additional evaluation using Devstral Small hosted on vLLM with LMCache (CacheBlend enabled) on the same SWE-bench Verified-mini dataset. We compare different blending granularities against the baseline (no blending) to verify that position-independent cache reuse does not degrade patch quality.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.75\linewidth]{graphs/v0_plots/visualized_eval_mini_results_lmcache.png}
+\vspace{-0.2in}
+  \caption{\small Results distributions for SWE-bench Verified-mini evaluation runs across different blending methods, served model is Devstral Small.}
+ \label{fig:e2e_blended_perf}
  \vspace{-0.15in}
 \end{figure}
