@@ -1,5 +1,9 @@
 default: build
 
+quick:
+	xelatex -file-line-error -halt-on-error -shell-escape thesis.tex
+	cp thesis.pdf fchen_thesis.pdf
+
 build:
 	xelatex -file-line-error -halt-on-error -shell-escape thesis.tex
 	biber thesis
