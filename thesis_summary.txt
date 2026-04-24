@@ -1,0 +1,42 @@
+Thesis Summary: Towards Utilizing Cached Context for Faster and Smarter Code Agents
+Frank Chen | CMU-CS-25-139 | August 2025
+
+PROBLEM
+- Coding agents (Claude Code, SWE-Agent, Agentless, etc.) face two key challenges:
+  - Challenge 1: Providing accurate, complete context from large repos without overwhelming the LLM
+  - Challenge 2: Reducing inference latency when the agent sends many sequential requests with overlapping context
+- Prior work addresses these independently; no existing system tackles both at once
+
+APPROACH
+- Frontend (context quality): RepoGraph — builds a repository-level code graph (via tree-sitter) linking definitions to references across files, then retrieves all relevant symbols for a given task
+- Backend (latency): CacheBlend — enables position-independent KV cache reuse by selectively recomputing only the top 15% most-divergent tokens per layer, allowing cache hits regardless of chunk ordering
+- Integration concept: "Cached Context" — chunk each prompt at per-context-object granularity (e.g., per symbol definition) so overlapping chunks across requests get cache hits even when their order changes
+
+SYSTEM DESIGN
+- Frontend: RepoGraph + Agentless (Localize → Repair → Rerank pipeline)
+- Backend: vLLM + LMCache with CacheBlend enabled
+- Adapter module: bridges frontend prompt format to backend cache system (chunk extraction → tokenization → stitching)
+- Local store: caches precomputed code graphs keyed by repo + commit hash
+- Request logging & replay: captures traces for offline evaluation and A/B testing
+
+IMPLEMENTATION ENHANCEMENTS (our contributions to LMCache/CacheBlend)
+- Non-contiguous cache hit support: hash each chunk independently after the prefix mask, enabling cache hits on any subset of reused chunks regardless of position (previously required contiguous prefix alignment)
+- Batched varied-shape allocation: single lock acquisition for all chunks in a request instead of per-chunk locking, reducing lock contention by factor of N
+- Bounded eviction with deadlock prevention: configurable retry limit on eviction loop to prevent infinite spin under concurrent load
+- Per-request profiling infrastructure: thread-local operation/phase timing with JSONL output for fine-grained latency diagnosis
+
+EVALUATION 1: PERFORMANCE (resolve rate on SWE-bench Verified-mini)
+- RepoGraph + Agentless tested across GPT-4o, o4-mini, Claude 3.5 Sonnet, Devstral Small
+- Validates cross-model consistency and portability of the retrieval algorithm
+- CacheBlend quality impact: compared blending granularities vs. no-blend baseline on Devstral Small — position-independent cache reuse does not significantly degrade patch quality
+
+EVALUATION 2: LATENCY (TTFT speedup on 537 agentic trace requests)
+- 3D analysis: fitted plane speedup = 1.479 * hit_ratio + 1.09e-6 * total_tokens + 0.427 (R^2 = 0.610)
+  - Cache hit ratio is the dominant predictor; breakeven at ~39% hit ratio
+  - Requests >10k tokens cluster tightly around fitted surface (predictable ~2x speedup)
+  - Requests <5k tokens show high variance (fan-shaped spread from 0.5x to 4-5x)
+- Aggregate: median speedup 0.51x, mean 0.77x — most individual requests see slowdown
+  - Driven by Django-based workload skewing toward short prompts
+  - Larger/more interconnected codebases would shift distribution toward favorable regime
+- Root cause analysis: vLLM's chunked-prefill scheduler fragments small requests across multiple steps (45% fragmentation rate for <2k tokens vs. 13% for >30k), and each step incurs ~27ms fixed overhead regardless of token count
+- Mitigations identified: min token-per-step threshold, prompt-length-aware bypass, coalesced retrieval mode
