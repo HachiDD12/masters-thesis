@@ -21,3 +21,7 @@
 *.loa
 
 **.DS_Store
+
+.claude/
+*.tar
+*.gz
