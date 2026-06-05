@@ -1,3 +1,8 @@
+\chapter{Evaluations}
+\label{cha:eval}
+
+The evaluation comprises two parts. We first measure the latency benefits of the enhanced CacheBlend backend under agentic workloads, which is the primary evaluation that validates the central contribution of this thesis (Section~\ref{sec:ch2_eval}). We then evaluate the frontend context retrieval algorithm across multiple LLM backends and verify that the backend cache reuse does not degrade output quality (Section~\ref{sec:ch1_eval}).
+
 \section{Latency Evaluation for KV Reuse}
 \label{sec:ch2_eval}
 
@@ -15,13 +20,13 @@ We replay the full set of prompts produced by RepoGraph + Agentless on SWE-bench
 
 \subsubsection{Model}
 
-All experiments use Devstral Small, consistent with the model used in the performance evaluation (Section~\ref{sec:ch1_eval}).
+All experiments use Devstral Small, which is also the open-source model used in the performance evaluation (Section~\ref{sec:ch1_eval}). Using a single model in both evaluations isolates the effect of the backend cache reuse from any model-to-model variation.
 
 \subsubsection{Configurations}
 We compare the following two configurations:
 \begin{itemize}
-    \item \textbf{Baseline --- vLLM (prefix caching)}: vLLM with its built-in prefix caching enabled, which reuses KV states only for exact prefix matches. No LMCache integration.
-    \item \textbf{Experimental --- vLLM + LMCache (CacheBlend)}: vLLM with LMCache integration and CacheBlend enabled, allowing position-independent KV cache reuse across non-contiguous segments.
+    \item \textbf{Baseline} (vLLM with prefix caching): vLLM with its built-in prefix caching enabled, which reuses KV states only for exact prefix matches. No LMCache integration.
+    \item \textbf{Experimental} (vLLM + LMCache with CacheBlend): vLLM with LMCache integration and CacheBlend enabled, allowing position-independent KV cache reuse across non-contiguous segments.
 \end{itemize}
 
 \subsection{Results}
@@ -33,7 +38,7 @@ Figure~\ref{fig:speedup_3d} presents the central result of our latency evaluatio
 \[
 \text{speedup} = 1.479 \times \text{hit\_ratio} + 1.09 \times 10^{-6} \times \text{total\_tokens} + 0.427
 \]
-achieves $R^2 = 0.610$ ($n = 532$), indicating that cache hit ratio is the dominant predictor of speedup while total token count has negligible independent effect. The breakeven point---where CacheBlend's overhead is exactly offset by the compute savings from cache reuse---sits at approximately 39\% cache hit ratio.
+achieves $R^2 = 0.610$ ($n = 532$), indicating that cache hit ratio is the dominant predictor of speedup while total token count has negligible independent effect. The breakeven point, where CacheBlend's overhead is exactly offset by the compute savings from cache reuse, sits at approximately 39\% cache hit ratio.
 
 \begin{figure}[H]
 \centering
@@ -46,7 +51,7 @@ achieves $R^2 = 0.610$ ($n = 532$), indicating that cache hit ratio is the domin
 
 Two distinct behavioral regimes are visible in the plot. For requests with more than 10{,}000 tokens, nearly all data points cluster tightly around the fitted surface, indicating that CacheBlend's speedup is highly predictable for long-context workloads. In contrast, requests below 5{,}000 tokens exhibit a pronounced fan-shaped spread: some achieve up to 4--5$\times$ speedup while others regress below 0.5$\times$, despite comparable hit ratios.
 
-Figure~\ref{fig:speedup_by_bucket} breaks down the speedup distribution by token-count bucket. The $<$2k bucket has a mean speedup of 0.862 but an absolute range of 0.036 to 9.239, confirming that short-prompt behavior is highly unpredictable. By contrast, the 5--10k bucket shows a tighter distribution centered near breakeven (mean 0.996, with 33\% of requests above 1.0$\times$), and the $>$30k bucket is consistently above breakeven. This pattern further supports the observation from the 3D plot: CacheBlend's latency benefit is most reliable for the long-context prompts that are also the most expensive to recompute from scratch.
+Figure~\ref{fig:speedup_by_bucket} breaks down the speedup distribution by token-count bucket. The $<$2k bucket has a mean speedup of 0.862 but an absolute range of 0.036 to 9.239, confirming that short-prompt behavior is highly unpredictable. The 5--10k bucket shows a tighter distribution centered near breakeven (mean 0.996, with 33\% of requests above 1.0$\times$), and the $>$30k bucket is consistently above breakeven. This pattern further supports the observation from the 3D plot: CacheBlend's latency benefit is most reliable for the long-context prompts that are also the most expensive to recompute from scratch.
 
 \begin{figure}[H]
 \centering
@@ -57,11 +62,11 @@ Figure~\ref{fig:speedup_by_bucket} breaks down the speedup distribution by token
  \vspace{-0.15in}
 \end{figure}
 
-Notably, this variance among small requests persists even when restricting to well-cached requests. Among requests with cache hit ratio $\geq$ 50\%, the $<$2k bucket retains a spread from 0.3$\times$ to 9.5$\times$, while the 5--10k bucket collapses to a tight 1.9--2.5$\times$ band. A high cache hit ratio alone does not guarantee fast performance for small requests; additional factors govern the outcome. We investigate these factors in detail in Section~\ref{sec:variance_analysis}.
+Notably, this variance among small requests persists even when restricting to well-cached requests. Among requests with cache hit ratio at least 50\%, the $<$2k bucket retains a spread from 0.3$\times$ to 9.5$\times$, while the 5--10k bucket collapses to a tight 1.9--2.5$\times$ band. A high cache hit ratio alone does not guarantee fast performance for small requests; additional factors govern the outcome. We investigate these factors in detail in Section~\ref{sec:variance_analysis}.
 
 \subsubsection{Speedup Distribution}
 
-Figure~\ref{fig:speedup_hist} shows the distribution of per-request TTFT speedup values across the full trace. The distribution is bimodal: the primary mode lies below 1.0$\times$ (median: 0.51$\times$, mean: 0.77$\times$), reflecting the overhead-dominated short-request regime discussed in Section~\ref{sec:variance_analysis}. A secondary mode near 2.0$\times$ corresponds to longer-prompt requests where cache reuse outweighs the per-step overhead. While the majority of individual requests experience a net slowdown under the current implementation, the high-speedup requests tend to be the most compute-intensive ones (exceeding 10{,}000 tokens), where absolute time savings are largest. It is worth noting that the SWE-bench Verified-mini trace is derived from real-world Django issues, which tend to produce shorter, more localized prompts compared to repositories with deeper dependency chains. As a result, the request length distribution skews toward the short-prompt regime where per-step overhead dominates. Workloads targeting larger or more interconnected codebases would shift the distribution toward longer prompts and higher cache hit ratios, where CacheBlend's speedup is both more consistent and more substantial.
+Figure~\ref{fig:speedup_hist} shows the distribution of per-request TTFT speedup values across the full trace. The distribution is bimodal: the primary mode lies below 1.0$\times$ (median 0.51$\times$, mean 0.77$\times$), reflecting the overhead-dominated short-request regime discussed in Section~\ref{sec:variance_analysis}. A secondary mode near 2.0$\times$ corresponds to longer-prompt requests where cache reuse outweighs the per-step overhead. While the majority of individual requests experience a net slowdown under the current implementation, the high-speedup requests tend to be the most compute-intensive ones (exceeding 10{,}000 tokens), where absolute time savings are largest. It is worth noting that the SWE-bench Verified-mini trace is derived from real-world Django issues, which tend to produce shorter, more localized prompts compared to repositories with deeper dependency chains. As a result, the request length distribution skews toward the short-prompt regime where per-step overhead dominates. Workloads targeting larger or more interconnected codebases would shift the distribution toward longer prompts and higher cache hit ratios, where CacheBlend's speedup is both more consistent and more substantial.
 
 \begin{figure}[H]
 \centering
@@ -81,7 +86,7 @@ The 3D speedup plot reveals that requests with fewer than 5{,}000 tokens exhibit
 
 vLLM's chunked-prefill scheduler determines how many tokens to process per scheduling step based on \texttt{max\_num\_batched\_tokens} and the current batch composition. A request that arrives during a decode-heavy window is interleaved across multiple steps, each processing only a fraction of the prompt. The profiler records reveal a bimodal distribution in the number of \texttt{retrieve\_layer} operations per logical request: 322 requests incur 4 operations (1 prefill step $\times$ 4 tensor-parallel workers) while 99 requests incur 36 operations (9 prefill steps $\times$ 4 workers).
 
-Figure~\ref{fig:fragmentation_rate} cross-tabulates the fragmentation rate against prompt length. Small requests ($<$2{,}000 tokens) are fragmented at a 45\% rate---3.4$\times$ the rate of 5--10k requests (10\%) and the highest of any bucket. This susceptibility arises because short prompts fill a smaller portion of \texttt{max\_num\_batched\_tokens}, leaving room for the scheduler to pack decode steps alongside them and defer their remaining tokens to subsequent batches.
+Figure~\ref{fig:fragmentation_rate} cross-tabulates the fragmentation rate against prompt length. Small requests ($<$2{,}000 tokens) are fragmented at a 45\% rate, which is 3.4$\times$ the rate of 5--10k requests (10\%) and the highest of any bucket. This susceptibility arises because short prompts fill a smaller portion of \texttt{max\_num\_batched\_tokens}, leaving room for the scheduler to pack decode steps alongside them and defer their remaining tokens to subsequent batches.
 
 \begin{figure}[H]
 \centering
@@ -113,7 +118,7 @@ GPU onload accounts for 91\% of blend's per-call time and exhibits a 1.93$\times
  \vspace{-0.15in}
 \end{figure}
 
-The fixed-cost nature of this overhead creates a fundamental asymmetry with respect to prompt length. For a 1{,}000-token request fragmented across 9 steps with 4 tensor-parallel workers, the aggregate retrieve overhead reaches ${\sim}$1{,}109\,ms---9.7$\times$ the ${\sim}$114\,ms baseline TTFT for straight prefill of the same prompt. The compute savings from cache hits (${\sim}$100\,ms) are dwarfed by this overhead. By contrast, a 50{,}000-token request incurs the same ${\sim}$1{,}109\,ms of overhead, but against a ${\sim}$5{,}000\,ms baseline (22\% of total), and cache hits save ${\sim}$4{,}500\,ms of compute, yielding a net ${\sim}$2$\times$ speedup that closely matches the fitted surface. The per-step overhead is invariant to the number of tokens in the step, but the compute savings scale linearly with token count; small requests sit below the crossover where overhead exceeds savings.
+The fixed-cost nature of this overhead creates a fundamental asymmetry with respect to prompt length. For a 1{,}000-token request fragmented across 9 steps with 4 tensor-parallel workers, the aggregate retrieve overhead reaches ${\sim}$1{,}109\,ms, which is 9.7$\times$ the ${\sim}$114\,ms baseline TTFT for straight prefill of the same prompt. The compute savings from cache hits (${\sim}$100\,ms) are dwarfed by this overhead. By contrast, a 50{,}000-token request incurs the same ${\sim}$1{,}109\,ms of overhead, but against a ${\sim}$5{,}000\,ms baseline (22\% of total), and cache hits save ${\sim}$4{,}500\,ms of compute, yielding a net ${\sim}$2$\times$ speedup that closely matches the fitted surface. The per-step overhead is invariant to the number of tokens in the step, but the compute savings scale linearly with token count, so small requests sit below the crossover where overhead exceeds savings.
 
 \subsubsection{Fragmentation as the Source of Variance}
 
@@ -128,15 +133,14 @@ The preceding analysis explains why small requests are slower \emph{on average},
  \vspace{-0.15in}
 \end{figure}
 
-Two sharply distinct populations emerge among small requests:
+Two distinct populations emerge among small requests:
 
 \begin{enumerate}
-    \item \textbf{Non-fragmented small requests} (blue, 4-op) cluster tightly at ${\sim}$0.54$\times$ speedup for the $<$2k bucket (mean = 0.538, std = 0.031). Blend overhead is consistent and always exceeds the compute savings for these short prompts. This population is \emph{predictable but consistently below breakeven}: each request pays a single step of 30.8\,ms overhead against a baseline TTFT that is itself only ${\sim}$60--200\,ms.
-
-    \item \textbf{Fragmented small requests} (orange, 36-op) exhibit the full spread from near 0$\times$ to 9.5$\times$ for the $<$2k bucket (mean = 1.604, std = 1.786). The variance is driven by the interaction between the number of scheduler steps and the cache hit pattern across those steps: some fragmented requests encounter favorable cache timing where cached content is warm from earlier steps in the same scheduling window, while others pay the full per-step overhead with minimal cache benefit.
+    \item \textbf{Non-fragmented small requests} (blue, 4-op) cluster tightly at ${\sim}$0.54$\times$ speedup for the $<$2k bucket (mean 0.538, std 0.031). Blend overhead is consistent and always exceeds the compute savings for these short prompts. This population is predictable but consistently below breakeven: each request pays a single step of 30.8\,ms overhead against a baseline TTFT that is itself only ${\sim}$60--200\,ms.
+    \item \textbf{Fragmented small requests} (orange, 36-op) exhibit the full spread from near 0$\times$ to 9.5$\times$ for the $<$2k bucket (mean 1.604, std 1.786). The variance is driven by the interaction between the number of scheduler steps and the cache hit pattern across those steps. Some fragmented requests encounter favorable cache timing where cached content is warm from earlier steps in the same scheduling window, while others pay the full per-step overhead with minimal cache benefit.
 \end{enumerate}
 
-The key insight is that \textbf{fragmentation is both the source of the worst under-performers and the best over-performers} among small requests. The scheduler's batching decision at request arrival time determines which fragmentation class a request falls into, and this decision depends on the instantaneous batch composition---not on the request's own cache state. Two identically sized, identically cached requests can land on opposite sides of the speedup distribution based solely on whether other decode requests happened to be in flight at the moment of arrival.
+The key insight is that \textbf{fragmentation is both the source of the worst under-performers and the best over-performers} among small requests. The scheduler's batching decision at request arrival time determines which fragmentation class a request falls into, and this decision depends on the instantaneous batch composition rather than on the request's own cache state. Two identically sized, identically cached requests can land on opposite sides of the speedup distribution based solely on whether other decode requests happened to be in flight at the moment of arrival.
 
 For large requests ($>$10k tokens), both fragmentation classes converge to the same narrow band around the fitted surface, because the per-step overhead is a small fraction of per-step compute regardless of how many steps the scheduler chose. This convergence confirms that the variance phenomenon is specific to the short-prompt regime and does not affect the primary target workload of long-context agentic prompts.
 
@@ -146,7 +150,9 @@ The fragmentation effect is not a fundamental limitation of CacheBlend's reuse m
 \begin{enumerate}
     \item[(a)] A \emph{minimum token-per-step threshold} that skips cache retrieval for micro-batched steps, directly addressing the pathological case at the adapter level. This is the lowest-risk fix: it can be implemented in the adapter's per-request loop and tuned via the per-call overhead profile (30.8\,ms blend, 18.0\,ms no-blend).
     \item[(b)] A \emph{prompt-length-aware bypass} that routes sub-2{,}000-token requests away from the blend path entirely. The data supports this approach strongly: even non-fragmented small requests average only 0.54$\times$ speedup, indicating that blend is net-negative for short prompts regardless of fragmentation. Sub-2k requests represent ${\sim}$27\% of the trace population (145/536), and their absolute compute savings are modest (${\sim}$100\,ms).
-    \item[(c)] A \emph{coalesced retrieval mode} that accumulates token ranges across prefill steps and issues a single batched lookup, eliminating the overhead multiplier. This is the most principled long-term solution but requires a non-trivial redesign of the adapter--cache-engine interface, as the current layerwise pipeline interleaves layer loads with the model's forward pass.
+    \item[(c)] A \emph{coalesced retrieval mode} that accumulates token ranges across prefill steps and issues a single batched lookup, eliminating the overhead multiplier. This is the most principled long-term solution but requires a non-trivial redesign of the adapter--cache-engine interface, since the current layerwise pipeline interleaves layer loads with the model's forward pass.
 \end{enumerate}
 
-For deployments where the request length distribution is known---as in the SWE-bench trace used here---approaches (a) and (b) provide effective, low-complexity mitigations. Approach (b) is particularly appealing given the finding that even the non-fragmented population does not benefit from blend at short prompt lengths.
+For deployments where the request length distribution is known, as in the SWE-bench trace used here, approaches (a) and (b) provide effective, low-complexity mitigations. Approach (b) is particularly appealing given the finding that even the non-fragmented population does not benefit from blend at short prompt lengths.
+
+Having established the latency characteristics of the enhanced backend, we next turn to the frontend context retrieval evaluation, which serves both as a robustness check across LLM backends and as a quality control for the backend cache reuse.
