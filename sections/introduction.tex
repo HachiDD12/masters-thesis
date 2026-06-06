@@ -13,7 +13,7 @@ CacheBlend's original evaluations, however, did not cover the workload character
 This thesis presents a set of enhancements to LMCache that address these limitations, together with an end-to-end evaluation under realistic code-agent workloads. The core technical contributions are on the backend serving system:
 
 \begin{itemize}
-    \item \textbf{Non-contiguous cache hit support}: the segment token database is modified so that chunks following a masked prefix are hashed independently, allowing any subset of previously seen chunks to be reused regardless of their position in the current prompt.
+    \item \textbf{Position correction for non-contiguous reuse}: the upstream implementation defines a runtime path that is supposed to correct rotary positional embeddings when a cached chunk is reused at a new position, but the metadata field it depends on is not actually populated. We add the missing \texttt{old\_positions} field to the memory object metadata along with its serialization handlers, completing the path so that content-matched chunks can be reused at any position in subsequent prompts.
     \item \textbf{Enhanced memory allocation and locking}: a batched varied-shape allocator reduces lock contention proportionally to the number of cache chunks per request, and a bounded eviction loop prevents deadlocks when all cache entries are pinned by concurrent lookups.
     \item \textbf{Per-request profiling infrastructure}: a thread-local profiler instruments the cache engine, storage backend, and GPU connector along the critical path, emitting structured per-operation and per-phase timing records for post-hoc analysis.
 \end{itemize}
