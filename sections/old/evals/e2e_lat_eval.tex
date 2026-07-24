@@ -1,0 +1,17 @@
+\section{Latency Evaluation (?)}
+\label{sec:ch3_eval2}
+\subsection{Setup}
+\subsubsection{Metric}
+Average time per request (or avg. time per issue or patch)
+
+Or use TTFT/Prefill, explaination see \url{https://docs.vllm.ai/en/latest/design/metrics.html#engine-core-events}
+\subsubsection{Baselines}
+SGLang, vLLM, vLLM w/o prefix-caching, all using Devstral Small?
+
+\subsubsection{Datasets}
+
+prompts produced by RepoGraph, using SWE-bench Lite
+
+\subsection{Results}
+
+It seems to be slower than expected. This could be due to blend granularity since fetching/storing KV cache chunks takes time, as well as the blending process which requires KV recomputation of a portion of tokens

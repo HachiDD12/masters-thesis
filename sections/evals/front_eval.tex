@@ -1,0 +1,50 @@
+\section{Performance Evaluation for Context Retrieval}
+\label{sec:ch1_eval}
+
+This section evaluates the frontend context retrieval algorithm (RepoGraph + Agentless) along two dimensions. First, we measure the resolve rate of the integrated agent across several LLM backends of different parameter sizes and architectures, to verify that the frontend behaves consistently when paired with different models. Second, we measure the resolve rate of the integrated agent under different CacheBlend blending granularities to verify that the backend cache reuse does not degrade output quality. Both evaluations serve as supporting evidence for the central latency contribution presented in Section~\ref{sec:ch2_eval}.
+
+\subsection{Setup}
+The evaluation of RepoGraph largely follows the methods of the original paper, where it is utilized as a plug-in component on top of an existing agentic framework. For the purpose of our study, we chose the Agentless procedural framework. The advantage of integrating a procedural framework in lieu of a traditional agent is simplicity and comprehensibility. Agentless deploys a three-phase process of localization, repair, and patch validation \cite{xia2024agentlessdemystifyingllmbasedsoftware}. Intermediate results are transparent between each step, where empty or error responses are immediately identifiable. This allows for finding bottlenecks and comparing performance across various models at step granularity.
+
+Our goal is to verify the consistency of the integrated agent's performance across LLM backends of different parameter sizes and architectures, and to verify that the backend cache reuse does not degrade output quality. For this purpose, we conducted experiments for RepoGraph + Agentless using a set of models with different configurations (for details see \hyperref[sec:ch1_eval_model]{Models}).
+
+\subsubsection{Metric}
+We adopt resolve rate following the original work as our primary evaluation metric. An instance is considered resolved if (1) the generated patch is successfully applied to the repository and (2) the patched code passes all test suites.
+
+This metric provides a direct measure of end-to-end task success, capturing not only whether a patch is syntactically correct but also whether it integrates cleanly into the repository and satisfies the intended functionality. Compared to intermediate measures such as code similarity or partial compilation success, the resolve rate reflects the practical utility of the generated patches and therefore serves as a good indicator of real-world performance.
+
+\subsubsection{Datasets}
+
+For a comprehensive yet time- and cost-efficient evaluation, we run our experiments on SWE-bench Verified-mini \cite{MariusHobbhahn2025swe-bench-verified-mini}, which is a subset of SWE-bench Verified \cite{chowdhury2024swebenchverified} selected via k-means clustering and linear programming so that the marginal distributions of important scores are preserved. This is a smaller dataset than SWE-bench Lite \cite{yang2024sweagent}, yet high-quality and well-specified, and is capable of reflecting an agent's performance across a spectrum of task difficulties.
+
+\subsubsection{Models}
+\label{sec:ch1_eval_model}
+To ensure consistency, robustness, and portability of RepoGraph as the repository-aware context retrieval algorithm, it is important to evaluate it against multiple model backends of varying architectures and parameter scales. Different models exhibit distinct behaviors in terms of tokenization, embedding spaces, and context utilization. A retrieval method that aligns well with one tokenizer or attention mechanism may underperform when paired with another, which makes cross-model testing critical for avoiding over-specialization.
+
+In addition, models differ in how they exploit the retrieved context. More powerful models may compensate for imperfect retrieval given stronger reasoning and synthesis capabilities, whereas smaller models are more sensitive to the accuracy and relevance of the retrieved context. Evaluating across a spectrum of models provides insight into how much of RepoGraph's performance benefits stem from the context retrieval strategy itself. This also allows us to characterize situations where retrieval quality is most impactful, particularly in cost-constrained settings where smaller models are attractive.
+
+Finally, cross-backend evaluation provides practical benefits for deployment. Since real-world systems often migrate between providers (e.g., OpenAI, Anthropic, Mistral), retrieval algorithms must remain portable to ensure stable performance under backend substitution. For our experiments, we therefore consider a representative set of both proprietary and open-source models, including \textbf{GPT-4o, o4-mini, Claude 3.5 Sonnet, and Devstral Small}, covering a range of architectures, parameter counts, and costs.
+
+\subsection{Results}
+
+Figure~\ref{fig:repograph_api_perf} shows the resolve rate distribution for RepoGraph + Agentless across the four model backends on SWE-bench Verified-mini. The integrated agent achieves comparable resolve rates across the proprietary and open-source models considered, which supports the claim that RepoGraph generalizes across backends rather than being tuned to a specific model family. The Devstral Small results are particularly relevant for the integrated system evaluation, since Devstral Small is the open-source model used as the LLM backend in the latency evaluation (Section~\ref{sec:ch2_eval}).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\linewidth]{graphs/v0_plots/visualized_eval_mini_results_all.png}
+\vspace{-0.2in}
+  \caption{\small Resolve rate distributions for SWE-bench Verified-mini evaluation runs across different models.}
+ \label{fig:repograph_api_perf}
+ \vspace{-0.15in}
+\end{figure}
+
+To verify that CacheBlend's KV cache reuse does not affect output quality, we run an additional evaluation using Devstral Small hosted on vLLM with LMCache (CacheBlend enabled) on the same SWE-bench Verified-mini dataset. We compare different blending granularities against the baseline (no blending) to verify that position-independent cache reuse does not degrade patch quality. Figure~\ref{fig:e2e_blended_perf} shows that the resolve rates across blending granularities are comparable to the no-blending baseline, confirming that the backend cache reuse preserves output quality even at finer chunk granularities.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\linewidth]{graphs/v0_plots/visualized_eval_mini_results_lmcache.png}
+\vspace{-0.2in}
+  \caption{\small Resolve rate distributions for SWE-bench Verified-mini evaluation runs across different blending methods, served model is Devstral Small.}
+ \label{fig:e2e_blended_perf}
+ \vspace{-0.15in}
+\end{figure}

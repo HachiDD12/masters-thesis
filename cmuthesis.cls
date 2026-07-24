@@ -55,7 +55,7 @@
 \vbox to 2in{
 \vfill
 \begin{center}
-{\Large \strut \@title\par}
+{\Large \strut \bf \@title\par}
 \vfill
 {\large \begin{tabular}[t]{c}{\bf \@author}\end{tabular}\par}
 \vfill
@@ -79,7 +79,7 @@
 
 \begin{center}
     {\bf Thesis Committee} \\
-    \vspace{0.2cm} \\
+    \vspace{0.2cm} 
     \@committee
 \end{center}
 \vskip 3em
