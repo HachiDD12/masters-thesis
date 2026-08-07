@@ -34,10 +34,13 @@ We compare the following two configurations:
 
 \subsubsection{Speedup as a Function of Cache Hit Ratio and Prompt Length}
 
+\rashmi{We don't need this plane fitting since it is not a plane. wrt total tokens the speedup is more like a Gaussian from Figure 4.2.}
 Figure~\ref{fig:speedup_3d} presents the central result of our latency evaluation: a 3D surface plot of TTFT speedup as a function of cache hit ratio and total prompt tokens, with IQR-based outlier removal (3.0$\times$ threshold) applied to remove anomalous data points. The fitted plane
 \[
 \text{speedup} = 1.479 \times \text{hit\_ratio} + 1.09 \times 10^{-6} \times \text{total\_tokens} + 0.427
 \]
+
+\todo{consider dropping formula}
 achieves $R^2 = 0.610$ ($n = 532$), indicating that cache hit ratio is the dominant predictor of speedup while total token count has negligible independent effect. The breakeven point, where CacheBlend's overhead is exactly offset by the compute savings from cache reuse, sits at approximately 39\% cache hit ratio.
 
 \begin{figure}[H]
@@ -63,6 +66,8 @@ Figure~\ref{fig:speedup_by_bucket} breaks down the speedup distribution by token
 \end{figure}
 
 Notably, this variance among small requests persists even when restricting to well-cached requests. Among requests with cache hit ratio at least 50\%, the $<$2k bucket retains a spread from 0.3$\times$ to 9.5$\times$, while the 5--10k bucket collapses to a tight 1.9--2.5$\times$ band. A high cache hit ratio alone does not guarantee fast performance for small requests; additional factors govern the outcome. We investigate these factors in detail in Section~\ref{sec:variance_analysis}.
+
+\rashmi{Add recommendation based on the token length below which should not try to read from cache}
 
 \subsubsection{Speedup Distribution}
 
