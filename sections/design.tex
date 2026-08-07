@@ -1,7 +1,7 @@
 \chapter{System Design}
 \label{cha:design}
 
-This chapter presents the design of the end-to-end system. We first introduce the Cached Context concept that organizes prompts so that the backend cache engine can exploit reuse opportunities (Section~\ref{sec:design_cc}). We then describe the system architecture, with emphasis on the backend serving path that constitutes our central contribution and a brief account of the frontend that feeds it (Section~\ref{sec:design_arch}). Section~\ref{sec:design_backend_enh} details the four backend enhancements that adapt CacheBlend's reference implementation to agentic workloads. Section~\ref{sec:design_frontend_impl} covers the implementation details on the frontend side that are needed to complete the end-to-end pipeline.
+This chapter presents the design of the end-to-end system. We first introduce the Cached Context concept that organizes prompts so that the backend cache engine can exploit reuse opportunities (Section~\ref{sec:design_cc}). We then describe the system architecture, with emphasis on the backend serving path that constitutes our central contribution and a brief account of the frontend that feeds it (Section~\ref{sec:design_arch}). Section~\ref{sec:design_backend_enh} details the backend enhancements that adapt CacheBlend's reference implementation to agentic workloads. Section~\ref{sec:design_frontend_impl} covers the implementation details on the frontend side that are needed to complete the end-to-end pipeline.
 
 \section{Cached Context}
 \label{sec:design_cc}
@@ -10,7 +10,7 @@ Cached Context is a prompt-organization concept rather than a caching mechanism 
 
 To illustrate why this matters, consider the following example. Suppose the agent constructs a prompt after context retrieval, consisting of four parts: system instructions, repository structure, issue description, and a block of relevant code snippets. A naive chunking strategy would treat this prompt as a single unit or divide it into four coarse blocks. With Cached Context, we further decompose the context blocks into finer-grained chunks. The relevant code snippets block, for example, might contain definitions for multiple symbols retrieved by RepoGraph, where each symbol definition is now its own cache chunk.
 
-Now consider a subsequent prompt in the same workflow, but with slightly different localization and a partly different set of code snippets, while most symbols and other blocks remain the same. Under conventional prefix caching, the cache can be reused only when the overlapping content appears identically from the start of the prompt. Enhanced withy Cached Context paired with the backend's position-independent caching, each overlapping symbol definition is a cache hit regardless of where it appears in the new prompt. This is particularly valuable in agentic workflows, where the order and combination of context elements frequently varies across requests.
+Now consider a subsequent prompt in the same workflow, but with slightly different localization and a partly different set of code snippets, while most symbols and other blocks remain the same. Under conventional prefix caching, the cache can be reused only when the overlapping content appears identically from the start of the prompt. With Cached Context paired with the backend's position-independent caching, each overlapping symbol definition is a cache hit regardless of where it appears in the new prompt. This is particularly valuable in agentic workflows, where the order and combination of context elements frequently varies across requests.
 
 \section{System Architecture}
 \label{sec:design_arch}
@@ -68,7 +68,7 @@ To enable Cached Context, we modify Agentless's prompt generation routine to mak
 \section{Backend Enhancements}
 \label{sec:design_backend_enh}
 
-This section presents the four backend enhancements that adapt CacheBlend's reference implementation (LMCache) to the workload characteristics of code agents. Each enhancement targets a specific limitation identified in Section~\ref{sec:bg_kvcache}: non-contiguous chunk reuse, lock contention and deadlocks in memory allocation, and the lack of fine-grained diagnostic instrumentation. A fourth subsystem (request logging and replay) is also part of the backend because it underpins the latency evaluation methodology in Chapter~\ref{cha:eval}.
+This section presents the backend enhancements that adapt CacheBlend's reference implementation (LMCache) to the workload characteristics of code agents. Each targets one of the limitations identified in Section~\ref{sec:bg_kvcache}: position correction for chunks reused at a new offset, lock contention and deadlocks in memory allocation, and the lack of fine-grained diagnostic instrumentation. The last of these is presented together with the request logging and replay mechanism, since the two jointly provide the measurement basis for the latency evaluation in Chapter~\ref{cha:eval}.
 
 \subsection{Position Correction for Non-Contiguous Reuse}
 \label{sec:non_contiguous}
@@ -90,30 +90,32 @@ Each cache chunk corresponds to a memory object whose shape depends on the chunk
 \paragraph{Bounded eviction with deadlock prevention.}
 When the in-memory cache is full, the allocator must evict existing entries to make room. In the original design, the eviction loop retried indefinitely until sufficient space was freed. Under heavy concurrent load, this could deadlock: if all cache entries were pinned by in-flight lookups on other threads, no entry was eligible for eviction, and the allocator would spin indefinitely while holding the CPU buffer lock. We bound the eviction loop to a configurable maximum number of retries (\texttt{MAX\_EVICTION\_RETRIES}). If the limit is reached, the allocation fails gracefully and the request falls back to full prefill computation, avoiding system-wide stalls.
 
-\subsection{Per-Request Profiling Infrastructure}
+\subsection{Debugging and Profiling Infrastructure}
 \label{sec:profiling}
+\label{sec:request_logging}
 
+Diagnosing why a given request did or did not benefit from cache reuse requires visibility at two levels: what the cache engine spent its time on inside a request, and what sequence of requests the agent produced in the first place. We implement one subsystem for each, and together they form the measurement basis for the latency evaluation in Chapter~\ref{cha:eval}.
+
+\paragraph{Per-request profiling.}
 To enable fine-grained latency analysis of the cache engine under realistic workloads, we implement a per-request profiling module that instruments the critical path through the adapter, cache engine, storage backend, and GPU connector. The profiler is organized around two abstractions: \emph{operations}, which correspond to logical units of work (e.g., a single request's retrieve pass), and \emph{phases}, which subdivide an operation into timed intervals (e.g., token database lookup, per-layer storage retrieval, per-layer GPU onload).
 
 The profiler uses thread-local storage to maintain a per-thread operation stack, ensuring that timing records from tensor-parallel workers do not bleed across threads. Each phase is recorded with its wall-clock duration, parent operation identifier, and thread ID. On completion, the profiler emits per-operation summaries in JSONL format, enabling post-hoc aggregation and visualization.
 
-Figure~\ref{fig:profiler_timeline} shows an example timeline produced by the profiler during a CacheBlend-enabled serving session. Each point represents a single profiled operation, plotted by wall-clock time on the x-axis and measured latency on the y-axis, and color-coded by operation type. The \texttt{retrieve\_layer} operations (orange) constitute the bulk of per-step cache engine overhead, typically clustering between 25 and 75\,ms with occasional spikes above 100\,ms. The \texttt{store\_layer} operations (green) show a similar range, corresponding to the cost of persisting newly computed KV states. The \texttt{adapter.start\_load\_kv} markers (red, near the baseline) indicate the lightweight entry point into the cache path. This visualization enables rapid identification of latency outliers and temporal patterns that would be invisible in aggregate statistics.
+Figure~\ref{fig:profiler_timeline} shows an example timeline produced by the profiler during a CacheBlend-enabled serving session. Each point represents a single profiled operation, plotted by wall-clock time on the x-axis and measured latency on the y-axis, and color-coded by operation type. The \texttt{retrieve\_layer} operations (orange) dominate the per-step cost on the read path, typically clustering between 25 and 75\,ms with occasional spikes above 100\,ms. The \texttt{store\_layer} operations (green) cover the synchronous GPU-to-CPU offload of newly computed KV states, which Section~\ref{sec:rec_miss_penalty} identifies as the dominant cost whenever the cache misses. The \texttt{adapter.start\_load\_kv} markers (red, near the baseline) indicate the lightweight entry point into the cache path. This visualization enables rapid identification of latency outliers and temporal patterns that would be invisible in aggregate statistics.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{graphs/lmcache_profile_20260408_044806_advprof_chunklb128_timeline.png}
 \vspace{-0.1in}
-  \caption{\small Example profiler output: per-operation latency timeline during a CacheBlend-enabled serving session (chunk lower bound 128 tokens). Each point is a single profiled operation, color-coded by type. The clustering of \texttt{retrieve\_layer} (orange) at 25--75\,ms reflects the fixed per-step overhead analyzed in Section~\ref{sec:variance_analysis}.}
+  \caption{\small Example profiler output: per-operation latency timeline during a CacheBlend-enabled serving session (chunk lower bound 128 tokens). Each point is a single profiled operation, color-coded by type. The clustering of \texttt{retrieve\_layer} (orange) at 25--75\,ms reflects the roughly token-independent per-call retrieve cost analyzed in Section~\ref{sec:variance_analysis}; the token-proportional store cost is analyzed in Section~\ref{sec:rec_miss_penalty}.}
  \label{fig:profiler_timeline}
  \vspace{-0.15in}
 \end{figure}
 
-This infrastructure is critical for diagnosing performance anomalies that are invisible at the aggregate level. As discussed in Section~\ref{sec:variance_analysis}, the profiler's per-request phase breakdown revealed the root cause of high speedup variance among small requests, an insight that would not have been possible from end-to-end TTFT measurements alone.
+This instrumentation is what makes performance anomalies visible at all. It revealed both the source of the speedup variance among small requests (Section~\ref{sec:variance_analysis}) and the synchronous KV store path that dominates the penalty on cache misses (Section~\ref{sec:rec_miss_penalty}). Neither would have been visible from end-to-end TTFT measurements alone.
 
-\subsection{Request Logging and Replay}
-\label{sec:request_logging}
-
-To support debugging, profiling, and reproducible experimentation, the API server includes a request logging module. During a server session, all incoming requests and their corresponding responses are captured and stored as a local trace file.
+\paragraph{Request logging and replay.}
+To support debugging and reproducible experimentation, the API server includes a request logging module. During a server session, all incoming requests and their corresponding responses are captured and stored as a local trace file.
 
 This transparency enables inspection of which stage during the Agentless routine may have caused a performance bottleneck. For example, if localization prompts consistently exhibit low cache hit rates, the prompt template can be adjusted to improve context alignment across requests.
 
