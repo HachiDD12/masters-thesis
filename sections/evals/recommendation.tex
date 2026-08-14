@@ -19,6 +19,8 @@ Figure~\ref{fig:crossover} plots median TTFT speedup against prompt length, sepa
  \vspace{-0.15in}
 \end{figure}
 
+\todo{fig x-axis just use tokens is ok, label too sparse}
+
 For the requests that miss, the picture is entirely different. Their median speedup is 0.46--0.57$\times$ in every length bucket from under 1{,}000 tokens to over 12{,}000 tokens, and essentially none beat the baseline at any length. The penalty for a cache miss is close to scale-invariant: enabling LMCache roughly doubles TTFT whether the prompt is short or long. A length floor therefore cannot help this population, because there is no length at which they stop losing.
 
 \subsubsection{Why the Miss Penalty Does Not Shrink With Length}
