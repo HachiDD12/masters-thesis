@@ -14,7 +14,7 @@ Figure~\ref{fig:crossover} plots median TTFT speedup against prompt length, sepa
 \centering
 \includegraphics[width=0.9\linewidth]{graphs/thesis_variance_figures/crossover_by_hit_cluster.png}
 \vspace{-0.1in}
-  \caption{\small Median TTFT speedup vs.\ prompt length, split by cache hit ratio. A length crossover near 2{,}000 tokens exists for requests that hit the cache. For requests that miss, the penalty is flat at ${\sim}0.5\times$ across the entire length range, so no length threshold recovers them. The hit-ratio series ends near 6{,}000 tokens because the trace contains almost no well-cached prompts beyond that length. Prompt length is estimated from baseline TTFT, which is a near-linear proxy (Pearson $r = 0.99$ on the subset with recorded token counts).}
+  \caption{\small Median TTFT speedup vs.\ prompt length, split by cache hit ratio. A length crossover near 2{,}000 tokens exists for  that hit the cache. For requests that miss, the penalty is flat at ${\sim}0.5\times$ across the entire length range, so no length threshold recovers them. The hit-ratio series ends near 6{,}000 tokens because the trace contains almost no well-cached prompts beyond that length. Prompt length is estimated from baseline TTFT, which is a near-linear proxy (Pearson $r = 0.99$ on the subset with recorded token counts).}
  \label{fig:crossover}
  \vspace{-0.15in}
 \end{figure}
