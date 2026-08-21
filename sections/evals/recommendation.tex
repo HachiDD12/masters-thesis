@@ -1,27 +1,46 @@
-\subsection{Recommendation: Routing Requests Around the Cache}
+\subsection{Case Study: Routing Requests Around the Cache}
 \label{sec:recommendation}
 
-The results above establish that only 17.7\% of requests in our trace are faster under blending, and that whether a request wins is governed by its cache hit ratio rather than its size. This raises a practical design question: since the cache path is not universally profitable, can a request be routed \emph{before} it reaches LMCache, so that requests unlikely to benefit go straight to vanilla vLLM? This subsection examines what a routing controller would need to decide, and what the measured data says each decision rule is worth. The question is worth asking precisely because cache reuse costs nothing in output quality, as Section~\ref{sec:ch1_eval} goes on to show, which leaves latency as the only axis on which the routing decision has to be made.
+The results above establish that only 17.7\% of requests in our trace are faster under blending, and that whether a request wins is governed by its cache hit ratio rather than its size. This raises a practical design question: since the cache path is not universally profitable, can a request be routed \emph{before} it reaches LMCache, so that requests unlikely to benefit go straight to vanilla vLLM? This subsection is a case study of that question: it examines what a routing controller would need to decide, and what the measured data says each candidate decision rule is actually worth. The question is worth asking precisely because cache reuse costs nothing in output quality, as Section~\ref{sec:ch1_eval} goes on to show, which leaves latency as the only axis on which the routing decision has to be made.
 
 \subsubsection{Is There a Prompt-Length Floor?}
 \label{sec:rec_length_floor}
 
-The natural first rule is a prompt-length floor. The intuition is that the cache path carries a startup cost that a short prompt cannot amortize, so below some length the lookup cannot pay for itself even in the best case. Our data supports this intuition, but only under a condition that the rule itself cannot check.
+The natural first rule is a prompt-length floor. The intuition is that the cache path carries a startup cost that a short prompt cannot amortize, so below some length the lookup cannot pay for itself even in the best case. The data offers only partial support for this intuition, and establishing what support there is requires care about how prompt length is measured.
 
-Figure~\ref{fig:crossover} plots median TTFT speedup against prompt length, separately for requests that hit the cache (hit ratio above 70\%) and requests that effectively miss it (hit ratio below 5\%). For the requests that hit, there is a clear crossover. Below roughly 1{,}600 tokens the median speedup is 0.62--0.69$\times$ and no more than a third of requests beat the baseline, because the lookup, onload, and blending machinery costs more than the prefill it avoids. Above that point the median rises to 1.55--2.14$\times$ and the majority of requests beat the baseline, reaching 97--100\% in the two best-sampled buckets. The measured crossover therefore sits near 1{,}600 tokens; we recommend a floor of 2{,}000 tokens, which is deliberately conservative given that the bucket immediately above the crossing contains only four requests.
+Testing it requires per-request token counts taken from the serving log rather than inferred from latency. The distinction matters: speedup is itself a ratio of baseline latency, so inferring prompt length from that same baseline would make length and speedup share a term and manufacture a correlation between them. Against measured token counts the correlation between length and speedup among well-cached requests is $r = -0.001$, whereas inferring length from baseline latency yields $r = +0.63$. All lengths reported here are measured.
+
+Figure~\ref{fig:crossover} plots median TTFT speedup against prompt length, separately for requests that hit the cache (hit ratio above 70\%) and requests that effectively miss it (hit ratio below 5\%). Prompts under 1{,}000 tokens are excluded, because at that size the cache path takes a near-constant 0.16\,s and the speedup ratio is set by how the vanilla baseline happened to be scheduled rather than by prompt size.
+
+Among the requests that hit, prompt length separates two regimes. Between 1{,}000 and 3{,}000 tokens they sit below breakeven, with a median of 0.80$\times$ in the lower bucket and 0.62$\times$ in the upper, and fewer than half beating the baseline. Beyond 4{,}500 tokens they sit well above it, at a median of 2.10$\times$ with 98\% beating the baseline. The median crosses breakeven once, at roughly 2{,}967 tokens, within an interval of 2{,}659 to 4{,}183 tokens that reflects how coarsely the region is sampled.
+
+That sampling is the main caveat on the crossing. Of the 85 well-cached requests at or above 1{,}000 tokens, 64 fall in a narrow band between 4{,}837 and 5{,}811 tokens, and only four lie between 2{,}000 and 4{,}500. The curve therefore interpolates across the region where the crossing occurs rather than measuring through it, and it is comparing two fairly distinct populations of requests rather than tracking one population as it grows. The single well-cached request above 9{,}000 tokens scores 0.57$\times$, which points the other way, though one request settles nothing. We therefore treat the crossing as evidence that a length effect exists among well-cached requests, not as a precise threshold.
+
+The bucket below 1{,}000 tokens is an exception that is best read as noise rather than signal. Its median speedup is 1.66$\times$, but individual values run from 0.17$\times$ to 9.24$\times$. At these sizes the blend path takes a near-constant ${\sim}$0.16\,s, so the ratio is governed entirely by how the vanilla baseline happened to be scheduled, and six of the nineteen requests in that bucket record a baseline above 0.4\,s, which is far more than a sub-1{,}000-token prefill should cost. We therefore do not treat that bucket as evidence for or against a floor.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.9\linewidth]{graphs/thesis_variance_figures/crossover_by_hit_cluster.png}
 \vspace{-0.1in}
-  \caption{\small Median TTFT speedup vs.\ prompt length, split by cache hit ratio. A length crossover near 2{,}000 tokens exists for  that hit the cache. For requests that miss, the penalty is flat at ${\sim}0.5\times$ across the entire length range, so no length threshold recovers them. The hit-ratio series ends near 6{,}000 tokens because the trace contains almost no well-cached prompts beyond that length. Prompt length is estimated from baseline TTFT, which is a near-linear proxy (Pearson $r = 0.99$ on the subset with recorded token counts).}
+  \caption{\small Median TTFT speedup vs.\ prompt length, split by cache hit ratio. Requests that hit the cache sit below breakeven from 1{,}000 to 3{,}000 tokens and well above it beyond 4{,}500; the shaded band marks the interval containing the single crossing. Requests that miss sit near $0.5\times$ at every length, so no length threshold recovers them. Prompts under 1{,}000 tokens are excluded because the cache path's fixed cost dominates the ratio at that size.}
  \label{fig:crossover}
  \vspace{-0.15in}
 \end{figure}
 
-\todo{fig x-axis just use tokens is ok, label too sparse}
-
 For the requests that miss, the picture is entirely different. Their median speedup is 0.46--0.57$\times$ in every length bucket from under 1{,}000 tokens to over 12{,}000 tokens, and essentially none beat the baseline at any length. The penalty for a cache miss is close to scale-invariant: enabling LMCache roughly doubles TTFT whether the prompt is short or long. A length floor therefore cannot help this population, because there is no length at which they stop losing.
+
+This exposes the limitation of the rule. A length floor is only useful to the extent that length predicts whether a request will hit. Figure~\ref{fig:length_vs_hits} plots the two against each other, using the measured token counts and the same served-run hit ratios as Figure~\ref{fig:speedup_3d}. The two clusters and the empty band between them appear here as well, which is the point: hit ratio is close to binary on this workload, and the question is whether length tells us which side a request will land on. It does so only weakly, at $r = -0.21$. The median hit ratio declines with length, from 20\% below 1{,}000 tokens to 2.6\% in the 6{,}000 to 10{,}000 range and 0.4\% above 30{,}000, but well-cached requests appear at every length. Knowing a prompt's length narrows the odds without determining the outcome.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{graphs/thesis_variance_figures/length_vs_hitratio.png}
+\vspace{-0.1in}
+  \caption{\small Served-run cache hit ratio against measured prompt length ($n = 536$). The same two clusters and the same empty band appear as in Figure~\ref{fig:speedup_3d}. Length is a weak predictor of which cluster a request falls into ($r = -0.21$): the per-bucket median declines with length, but well-cached requests occur at every length.}
+ \label{fig:length_vs_hits}
+ \vspace{-0.15in}
+\end{figure}
+
+The declining median is what the upper gate in Section~\ref{sec:rec_gate_effect} exploits. Beyond 6{,}000 tokens the median hit ratio falls to 2.6\% and keeps dropping, reaching 0.4\% above 30{,}000, so bypassing the long tail gives up little reuse. This is a property of how this agent assembles long prompts rather than of the caching mechanism, and it would need rechecking on a workload whose long requests overlap more.
 
 \subsubsection{Why the Miss Penalty Does Not Shrink With Length}
 \label{sec:rec_miss_penalty}
@@ -30,29 +49,43 @@ The scale invariance follows from where the cost is incurred. On a miss, the ret
 
 This is a consequential observation for the controller design, because it means the miss penalty is not an intrinsic property of position-independent reuse. It is a property of storing synchronously on the critical path. Moving the offload to a background stream, so that a request pays only for what it reads and not for what it writes, would remove the penalty for the 80\% of our trace that misses. We did not implement this change, and validating it is the highest-value next step identified by this evaluation.
 
-\subsubsection{What a Length Gate Actually Buys}
+\subsubsection{What Length-Based Routing Actually Buys}
 \label{sec:rec_gate_effect}
 
-Because the miss population dominates the trace, a length gate alone does not rescue aggregate performance. Figure~\ref{fig:gated_hist} shows the speedup distribution before and after applying the recommended 2{,}000-token floor. The gate bypasses 152 of 536 requests, but the retained distribution is essentially unchanged in shape, and its median speedup moves from 0.509$\times$ to 0.493$\times$. Summed over the trace, routing every request through LMCache costs 772\,s more than vanilla vLLM would have; the best length gate we swept recovers only 28\% of that deficit, and does so by bypassing 77\% of all traffic.
+The crossover suggests a floor. In aggregate, however, the floor is not the rule that matters. Figure~\ref{fig:gated_hist} compares three policies on the same trace: routing everything through the cache, applying a 2{,}000-token floor, and applying a band that adds an upper threshold at 6{,}000 tokens. We measure each by the aggregate deficit, the extra wall-clock time the cache path costs across the whole trace relative to serving every request on vanilla vLLM. Serving the entire trace on vanilla vLLM takes 726\,s of TTFT in total, which is the reference point for these figures.
+
+Routing everything through LMCache costs 772\,s more than that. A 2{,}000-token floor barely moves it, to 748\,s, even though it bypasses 149 of 536 requests. It recovers 3\% of the deficit while giving up 28\% of the traffic. Raising the floor does not rescue it either: a 5{,}000-token floor still leaves 698\,s while bypassing half the workload. The reason is visible in the figure. The sub-breakeven mode is populated at every length, so removing short requests removes about as much benefit as cost, and the median speedup of what remains falls slightly rather than rising.
+
+The upper threshold is what pays. An upper gate alone at 6{,}000 tokens, with no floor at all, brings the deficit from 772\,s to 101\,s. That single rule accounts for 87\% of the total recovery available from any length-based policy we swept. Adding the 2{,}000-token floor on top brings it to 78\,s. The mechanism is the one identified above: long prompts in this trace rarely hit, so they pay the full synchronous store cost with almost no compensating read. The upper gate is therefore better understood as a crude reuse gate than as a length gate. It works because length correlates with reuse at the top of this range, not because length is the quantity that matters.
+
+Two limits are worth stating plainly. Every band we swept leaves the aggregate negative; the best of them, 5{,}000 to 6{,}000 tokens, still costs 27\,s and does so by routing only 111 of 536 requests, which is narrow enough that it is really just bracketing this workload's dominant prompt size rather than expressing a general rule. And under every policy the median speedup of the retained population stays at or below 0.53$\times$, because the retained set remains dominated by requests that miss. Length cannot separate hits from misses, so no threshold on length can make the cache path profitable here.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.9\linewidth]{graphs/thesis_variance_figures/speedup_histogram_length_gated.png}
 \vspace{-0.1in}
-  \caption{\small Per-request TTFT speedup with and without a 2{,}000-token routing gate. The gate removes requests that cannot win, but the sub-breakeven mode persists because it is populated at all prompt lengths.}
+  \caption{\small Per-request TTFT speedup under three routing policies. Bypassed requests are served by vanilla vLLM and sit at exactly 1.0$\times$ by construction, so they are excluded and each histogram shows only the requests still taking the cache path. The legend reports the aggregate deficit for each policy.}
  \label{fig:gated_hist}
  \vspace{-0.15in}
 \end{figure}
+
 
 \subsubsection{Proposed Controller}
 \label{sec:rec_controller}
 
 Taken together, these results argue for treating the LMCache layer as optional per request, mediated by a controller in front of the backend that applies two independent rules.
 
-The first is the length floor established above. It is cheap, since prompt length is known before dispatch, and it is safe, since below 2{,}000 tokens the cache path does not win even when it hits. This rule is a strict improvement and can be deployed immediately.
+The first is a length band rather than a floor. Prompt length is known before dispatch, so the rule is cheap to evaluate, and the upper threshold is where nearly all of its value lies. The floor contributes little on its own and is best justified as protection against the short requests that cannot win even when they hit.
 
-The second rule concerns reuse, and it is the one that determines whether the system is profitable overall. Since the outcome is governed by whether a request will hit, the controller needs an estimate of hit likelihood before committing to the cache path. A cheap approximation is available in the agentic setting: the frontend knows which context objects it assembled into the prompt, so it can report how many of them it has previously sent. That estimate can be attached to the request and used to route. Validating such a predictor requires a trace that samples hit ratio continuously, which ours does not, and we identify this as future work in Section~\ref{sec:conclusion_future}.
+The second rule concerns reuse, and it is the one that determines whether the system is profitable overall. Since the outcome is governed by whether a request will hit, the controller needs an estimate of hit likelihood before it commits to the cache path. Both rules govern only \emph{whether} a request takes the cache path, never what the model receives, so neither can affect the quality of the generated patch. Section~\ref{sec:ch1_eval} verifies the corresponding property of the cache path itself: that reusing KV state across positions leaves output quality intact.
 
-Until the store path is made asynchronous, a deployment that cannot predict reuse is better served by enabling LMCache selectively, for workloads known to have high context overlap, rather than by default.
+\subsubsection{Next Steps}
+\label{sec:rec_next_steps}
 
-Both rules govern only \emph{whether} a request takes the cache path, never what the model receives, so neither can affect the quality of the generated patch. Section~\ref{sec:ch1_eval} verifies the corresponding property of the cache path itself: that reusing KV state across positions leaves output quality intact.
+Three concrete steps follow from this case study, in decreasing order of expected value.
+
+\emph{Move the KV store off the critical path.} Section~\ref{sec:rec_miss_penalty} attributes the roughly 2$\times$ miss penalty to the synchronous offload, which the roughly 80\% of requests that miss pay in full. Making the offload asynchronous would remove that penalty without changing the reuse mechanism at all, and would make the routing question far less pressing.
+
+\emph{Build and validate a reuse predictor.} A cheap approximation is available in the agentic setting: the frontend knows which context objects it assembled into the prompt, so it can report how many of them it has already sent. That estimate can be attached to the request and used to route. Validating it requires a trace that samples hit ratio continuously, which ours does not, as noted in Section~\ref{sec:conclusion_future}.
+
+\emph{Deploy the length band as an interim measure.} Until the store path is asynchronous and a predictor exists, an upper threshold near 6{,}000 tokens recovers most of what length-based routing can recover on this workload. A deployment that cannot predict reuse at all is better served by enabling LMCache selectively, for workloads known to have high context overlap, rather than by default.
