@@ -58,7 +58,7 @@ Routing everything through LMCache costs 772\,s more than that. A 2{,}000-token 
 
 The upper threshold is what pays. An upper gate alone at 6{,}000 tokens, with no floor at all, brings the deficit from 772\,s to 101\,s. That single rule accounts for 87\% of the total recovery available from any length-based policy we swept. Adding the 2{,}000-token floor on top brings it to 78\,s. The mechanism is the one identified above: long prompts in this trace rarely hit, so they pay the full synchronous store cost with almost no compensating read. The upper gate is therefore better understood as a crude reuse gate than as a length gate. It works because length correlates with reuse at the top of this range, not because length is the quantity that matters.
 
-Two limits are worth stating plainly. Every band we swept leaves the aggregate negative; the best of them, 5{,}000 to 6{,}000 tokens, still costs 27\,s and does so by routing only 111 of 536 requests, which is narrow enough that it is really just bracketing this workload's dominant prompt size rather than expressing a general rule. And under every policy the median speedup of the retained population stays at or below 0.53$\times$, because the retained set remains dominated by requests that miss. Length cannot separate hits from misses, so no threshold on length can make the cache path profitable here.
+Two properties of this result are worth noting. The recovery comes from removing large absolute losses rather than from improving the typical request: the median speedup of the routed population stays near 0.51$\times$ under every policy we swept, while the aggregate improves by an order of magnitude. And the remaining deficit is small but not zero. The narrowest band, 5{,}000 to 6{,}000 tokens, brings it to 27\,s while routing 111 of 536 requests, which is close to bracketing this workload's dominant prompt size; the wider 2{,}000 to 6{,}000 band is the more general rule at a deficit of 78\,s.
 
 \begin{figure}[H]
 \centering
@@ -66,6 +66,17 @@ Two limits are worth stating plainly. Every band we swept leaves the aggregate n
 \vspace{-0.1in}
   \caption{\small Per-request TTFT speedup under three routing policies. Bypassed requests are served by vanilla vLLM and sit at exactly 1.0$\times$ by construction, so they are excluded and each histogram shows only the requests still taking the cache path. The legend reports the aggregate deficit for each policy.}
  \label{fig:gated_hist}
+ \vspace{-0.15in}
+\end{figure}
+
+Figure~\ref{fig:gated_hitratio} shows the same policy in the coordinates of Figure~\ref{fig:speedup_3d}, with the prompt-length dimension dropped so that only the routing decision is visible. The band retains 228 of the 532 plotted requests, including 68 of the 105 well-cached ones, and its routed set has a median speedup of 0.509$\times$, essentially unchanged from the ungated trace. The figure shows why both facts hold at once. Routed and bypassed requests appear in both hit-ratio clusters, so the band does not sort requests by whether they will hit. What it does instead is remove the long prompts, which are the requests whose misses cost the most in absolute terms. That is enough to recover most of the aggregate deficit without moving the per-request distribution, and it is the sense in which prompt length is a useful routing signal here.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{graphs/thesis_variance_figures/speedup_vs_hitratio_gated.png}
+\vspace{-0.1in}
+  \caption{\small TTFT speedup against cache hit ratio under the 2{,}000 to 6{,}000 token routing band, using the colours of Figure~\ref{fig:gated_hist}. Orange points are routed to the cache, grey points bypass it. The band admits many low-hit requests and turns away well-cached ones, because prompt length separates the two clusters only weakly.}
+ \label{fig:gated_hitratio}
  \vspace{-0.15in}
 \end{figure}
 
