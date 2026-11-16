@@ -1,18 +1,21 @@
-\chapter{System Design}
+\chapter{System Overview}
 \label{cha:design}
 
-This chapter presents the design of the end-to-end system. We first introduce the Cached Context concept that organizes prompts so that the backend cache engine can exploit reuse opportunities (Section~\ref{sec:design_cc}). We then describe the system architecture, with emphasis on the backend serving path that constitutes our central contribution and a brief account of the frontend that feeds it (Section~\ref{sec:design_arch}). Section~\ref{sec:design_backend_enh} details the backend enhancements that adapt CacheBlend's reference implementation to agentic workloads. Section~\ref{sec:design_frontend_impl} covers the implementation details on the frontend side that are needed to complete the end-to-end pipeline.
+This chapter describes the system we study. We first introduce the Cached Context concept that organizes prompts so that the cache can find reusable chunks (Section~\ref{sec:design_cc}). We then describe the end-to-end architecture, from the agent frontend to the serving backend (Section~\ref{sec:design_arch}), the infrastructure we use to record and replay agent traffic (Section~\ref{sec:profiling}), and the frontend implementation details needed to complete the pipeline (Section~\ref{sec:design_frontend_impl}).
 
 \section{Cached Context}
 \label{sec:design_cc}
 
-Cached Context is a prompt-organization concept 
-% \rashmi{This is basically how to chunk the gathered context, is it not? Is this a new concept or an existing one? Add references to this. If it is new, we need to chat about how to update the writing about this, we should consider bringing it up more clearly in intro for example. But then we will also have to have an evaluation to show the benefits and how exactly we do, that is at least a discussion on different approaches to do it. We will need a longer discussion on this. Let us discuss in our next meeting.} 
-rather than a caching mechanism on its own. The key idea is to chunk each prompt at a per-context-object granularity, where a context object corresponds to a code snippet containing a symbol definition, a repository structure tree, or another semantically coherent unit of context. The actual caching is performed by the backend, which combines CacheBlend's content-addressed segment lookup with the position correction enhancement introduced in Section~\ref{sec:non_contiguous}. The two together make a cached chunk reusable regardless of its position in subsequent prompts, which is what we refer to as \emph{position-independent caching}.
+Cached Context is a prompt-organization concept
+% \rashmi{This is basically how to chunk the gathered context, is it not? Is this a new concept or an existing one? Add references to this. If it is new, we need to chat about how to update the writing about this, we should consider bringing it up more clearly in intro for example. But then we will also have to have an evaluation to show the benefits and how exactly we do, that is at least a discussion on different approaches to do it. We will need a longer discussion on this. Let us discuss in our next meeting.}
+% [ADDRESSED, for Rashmi to confirm] Reframed as how CacheBlend's chunk model is applied to agent prompts (not a new caching mechanism); the paragraph on prompt layout below ties it to the measured reuse in Section~\ref{sec:cb_where}.
+rather than a caching mechanism on its own. The key idea is to chunk each prompt at a per-context-object granularity, where a context object corresponds to a code snippet containing a symbol definition, a repository structure tree, or another semantically coherent unit of context. The actual caching is performed by the backend, which looks up each chunk by its content and corrects its positional encoding when the chunk is reused at a new offset, so a cached chunk is reusable regardless of its position in subsequent prompts. This is what we refer to as \emph{position-independent caching}.
 
 To illustrate why the choice of chunk granularity matters, consider the following example. Suppose the agent constructs a prompt after context retrieval, consisting of four parts: system instructions, repository structure, issue description, and a block of relevant code snippets. A naive chunking strategy would treat this prompt as a single unit or divide it into four coarse blocks. With Cached Context, we further decompose the context blocks into finer-grained chunks. The relevant code snippets block, for example, might contain definitions for multiple symbols retrieved by RepoGraph, where each symbol definition is now its own cache chunk.
 
 Now consider a subsequent prompt in the same workflow, but with slightly different localization and a partly different set of code snippets, while most symbols and other blocks remain the same. Under conventional prefix caching, the cache can be reused only when the overlapping content appears identically from the start of the prompt. With Cached Context paired with the backend's position-independent caching, each overlapping symbol definition is a cache hit regardless of where it appears in the new prompt. This is particularly valuable in agentic workflows, where the order and combination of context elements frequently varies across requests.
+
+The layout of the prompt decides which mechanism can reuse a given piece of shared context. Prefix caching reuses content only when it matches from the very start of the prompt, so shared context placed first is reusable by either mechanism, while shared context that follows request-specific content, such as an issue description, can only be reused by position-independent caching. Section~\ref{sec:cb_where} shows that this is where blending's additional reuse comes from in the agent we study.
 
 \section{System Architecture}
 \label{sec:design_arch}
@@ -39,7 +42,7 @@ The backend consists of an API server that serves as the entry point for fronten
     \item Return the generated response to the client.
 \end{enumerate}
 
-The backend exposes a chat-completion interface compatible with the OpenAI API format. This means any compatible frontend can drive the backend without modification beyond annotating context-object boundaries in its prompt templates.
+The backend exposes a chat-completion interface compatible with the OpenAI API format. This means any compatible frontend can drive the backend without modification beyond annotating context-object boundaries in its prompt templates. The cache reuses a chunk wherever it appears in a prompt, and when the agent samples several answers from the same prompt, the samples share a single blended copy of the cached state.
 
 \subsection{Adapter Module}
 \label{sec:design_adapter}
@@ -51,7 +54,7 @@ The adapter module serves as the bridge between the frontend prompt format and t
     \item \textbf{Chunk stitching}: reassembling the tokenized chunks to produce the final prompt token sequence consumed by the LLM engine.
 \end{enumerate}
 
-The adapter's design supports flexible chunking granularity based on the frontend prompt template and user preference. If chunking is per symbol, the frontend adds a delimiter after each code snippet fetched during code graph exploration. If a coarser granularity is desired (e.g., per context block), delimiters can be placed only between major sections of the prompt. This flexibility makes the system robust to various workload patterns and to differing optimal chunk sizes.
+The adapter's design supports flexible chunking granularity based on the frontend prompt template and user preference. If chunking is per symbol, the frontend adds a delimiter after each code snippet fetched during code graph exploration. If a coarser granularity is desired (e.g., per context block), delimiters can be placed only between major sections of the prompt. Chunks shorter than a configurable minimum are merged into their neighbors. This flexibility makes the system robust to various workload patterns and to differing optimal chunk sizes.
 
 \subsection{Frontend: RepoGraph + Agentless}
 \label{sec:design_arch_frontend}
@@ -67,69 +70,18 @@ RepoGraph enhances the localization phase by providing repository-aware context.
 
 To enable Cached Context, we modify Agentless's prompt generation routine to make context object boundaries explicit, which exposes chunk boundaries to the backend adapter without affecting the semantic content of the prompt. The frontend is otherwise treated as a pluggable component: any retrieval module that produces prompts with explicit chunk boundaries can replace RepoGraph + Agentless without changes to the backend.
 
-\section{Backend Enhancements}
-\label{sec:design_backend_enh}
+These steps produce three kinds of requests to the language model. \emph{Localization} requests ask the model which files and code regions to edit. \emph{Greedy repair} requests ask for a single candidate patch. Each greedy repair is followed by a \emph{sampled repair} request, which sends the same prompt again and asks for several alternative patches in parallel, so it is an exact repeat of the request before it. Localization requests for different issues, by contrast, share repository context but differ in their issue text. The three request types behave very differently under caching, and Chapter~\ref{cha:eval} analyzes them separately.
 
-This section presents the backend enhancements that adapt CacheBlend's reference implementation (LMCache) to the workload characteristics of code agents. Each addresses a capability the agentic regime demands and the question-answering regime does not: reuse of cached state at shifted positions, allocation that tolerates many chunks per prompt and many prompts at once, and enough visibility into the cache path to attribute cost within it. The last of these is presented together with the request logging and replay mechanism, since the two jointly provide the measurement basis for the latency evaluation in Chapter~\ref{cha:eval}.
-
-\subsection{Position-Independent Reuse}
-\label{sec:non_contiguous}
-
-Reusing a cached chunk at a position other than the one it was first computed at requires two capabilities, and they are independent of each other. The first is \emph{finding} the chunk: the cache must be addressed by content, so that a block of context is recognized as the same block wherever it appears in a prompt. The second is \emph{using} it: the retrieved state must be re-anchored to the position the chunk now occupies. A system that provides only the first can locate reusable state but cannot apply it, and its reuse collapses back to the prefix case it was meant to improve on.
-
-CacheBlend supplies the first capability. Each chunk is keyed by a hash of its own tokens rather than by its offset, so lookup is already position-independent. If one prompt carries the ordered chunks $[C_1, C_3, C_4]$ and a later prompt carries $[C_2, C_3, C_4]$, the cache recognizes $C_3$ and $C_4$ in the second prompt even though a different chunk now precedes them.
-
-The second capability is what our system adds. Modern transformers encode token position through rotary embeddings, which are folded into the key and value vectors at the time they are computed. Cached state therefore carries the positions it was born with. A chunk first seen at positions $[120, 180]$ holds embeddings for those positions, and dropping it unmodified into a prompt where it now spans $[400, 460]$ would present the model with attention state describing a sequence that does not exist. Correctness requires rotating the cached keys from their original positions to their current ones as they are loaded, which means the cache must remember where each chunk was when it was stored, and the load path must apply that rotation.
-
-We carry the original positions alongside each cached chunk and re-anchor it on load. The consequence is that reuse no longer depends on alignment. Returning to the example, $C_3$ and $C_4$ are not only found in the second prompt but usable in it, and they remain usable if the agent reorders them, so $[C_1, C_3, C_4]$ followed by $[C_2, C_4, C_3]$ still reuses two chunks of three. A chunk that happens to land at its original offset is rotated by zero and behaves exactly as before.
-
-This matters for code agents specifically because their prompts are rearrangements of a slowly changing pool of context. Successive requests in a single task retrieve overlapping sets of symbol definitions and repository structure, but the localization step reorders them and substitutes a few between turns. Under alignment-dependent reuse, a single inserted or dropped block at the front of a prompt invalidates everything after it. Under position-independent reuse, that same edit costs only the block it touched.
-
-Figure~\ref{fig:hitrate_before_after} shows what this is worth on the agent trace used throughout Chapter~\ref{cha:eval}. Measured as the share of all prompt tokens served from cache rather than recomputed, reuse rises from 14.7\% to 23.0\%, an increase of 8.3 percentage points, or a little over half again as much reuse as alignment-dependent matching achieves. The gain comes entirely from chunks that were already present in the cache and already being found there, but that could not previously be applied because they had moved.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.55\linewidth]{graphs/thesis_variance_figures/cache_hitrate_before_after.pdf}
-\vspace{-0.1in}
-  \caption{\small Share of prompt tokens served from cache across the agent trace, under alignment-dependent reuse (previous) and position-independent reuse (current).}
- \label{fig:hitrate_before_after}
- \vspace{-0.15in}
-\end{figure}
-
-\subsection{Memory Allocation Under Concurrency}
-\label{sec:mem_alloc}
-
-The cache holds its hot tier in main memory, staging chunks there before they are loaded back onto the GPU. Two properties of agentic traffic stress that tier in ways that question-answering workloads do not: a single prompt is divided into many chunks rather than a few, and several requests from the same agent task are typically in flight at once. Both concern how allocation behaves under contention rather than how much memory is available.
-
-\paragraph{Allocation granularity.}
-Storing a prompt means obtaining memory for every one of its chunks, and chunks vary in size because context objects do. If the allocator is entered once per chunk, the cost of admission to the cache scales with how finely the prompt was divided, and the serialization that protects the shared memory pool is paid over and over for what is logically one operation. This penalizes exactly the prompts that Cached Context is designed to produce. We instead admit a prompt's chunks as a single transaction: the allocator is told all the sizes at once, reserves them together, and makes room in one pass if capacity is short. Contention then scales with the number of concurrent requests rather than with the number of chunks inside them, and a prompt can no longer be admitted halfway before a competing request reclaims the space it still needs.
-
-\paragraph{Reclamation under pinning.}
-Making room means evicting older entries, and an entry currently being read by another request cannot be evicted. When many requests are resident at once, it is possible for every candidate to be pinned, at which point an allocator that simply waits for space will wait forever while holding the pool that would let others make progress. The condition is rare but it is a livelock rather than a slowdown, so it does not resolve on its own. We treat exhaustion as an ordinary outcome instead: reclamation gives up after a bounded number of attempts, the store is abandoned, and the request proceeds by computing its own prefill. Losing one opportunity to cache is a far cheaper failure than stalling the engine, and the cache converges back to normal operation as soon as the pinned entries are released.
-
-\subsection{Debugging and Profiling Infrastructure}
+\section{Measurement Infrastructure}
 \label{sec:profiling}
 \label{sec:request_logging}
 
-Diagnosing why a given request did or did not benefit from cache reuse requires visibility at two levels: what the cache engine spent its time on inside a request, and what sequence of requests the agent produced in the first place. We implement one subsystem for each, and together they form the measurement basis for the latency evaluation in Chapter~\ref{cha:eval}.
+Studying cache behavior on agent traffic requires serving the same sequence of agent requests under different cache configurations, and seeing what the cache engine does with each request. We implement one subsystem for each.
 
 \paragraph{Per-request profiling.}
-To enable fine-grained latency analysis of the cache engine under realistic workloads, we implement a per-request profiling module that instruments the critical path through the adapter, cache engine, storage backend, and GPU connector. The profiler is organized around two abstractions: \emph{operations}, which correspond to logical units of work (e.g., a single request's retrieve pass), and \emph{phases}, which subdivide an operation into timed intervals (e.g., token database lookup, per-layer storage retrieval, per-layer GPU onload).
+A per-request profiling module instruments the critical path through the adapter, cache engine, storage backend, and GPU connector. The profiler is organized around two abstractions: \emph{operations}, which correspond to logical units of work (e.g., a single request's retrieve pass), and \emph{phases}, which subdivide an operation into timed intervals (e.g., token database lookup, per-layer storage retrieval, per-layer GPU onload).
 
 The profiler uses thread-local storage to maintain a per-thread operation stack, ensuring that timing records from tensor-parallel workers do not bleed across threads. Each phase is recorded with its wall-clock duration, parent operation identifier, and thread ID. On completion, the profiler emits per-operation summaries in JSONL format, enabling post-hoc aggregation and visualization.
-
-Figure~\ref{fig:profiler_timeline} shows an example timeline produced by the profiler during a CacheBlend-enabled serving session. Each point represents a single profiled operation, plotted by wall-clock time on the x-axis and measured latency on the y-axis, and color-coded by operation type. The \texttt{retrieve\_layer} operations (orange) dominate the per-step cost on the read path, typically clustering between 25 and 75\,ms with occasional spikes above 100\,ms. The \texttt{store\_layer} operations (green) cover the synchronous GPU-to-CPU offload of newly computed KV states, which Section~\ref{sec:rec_miss_penalty} identifies as the dominant cost whenever the cache misses. The \texttt{adapter.start\_load\_kv} markers (red, near the baseline) indicate the lightweight entry point into the cache path. This visualization enables rapid identification of latency outliers and temporal patterns that would be invisible in aggregate statistics.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=\linewidth]{graphs/lmcache_profile_20260408_044806_advprof_chunklb128_timeline.png}
-\vspace{-0.1in}
-  \caption{\small Example profiler output: per-operation latency timeline during a CacheBlend-enabled serving session (chunk lower bound 128 tokens). Each point is a single profiled operation, color-coded by type. The clustering of \texttt{retrieve\_layer} (orange) at 25--75\,ms reflects the roughly token-independent per-call retrieve cost analyzed in Section~\ref{sec:variance_analysis}; the token-proportional store cost is analyzed in Section~\ref{sec:rec_miss_penalty}.}
- \label{fig:profiler_timeline}
- \vspace{-0.15in}
-\end{figure}
-
-This instrumentation is what makes performance anomalies visible at all. It revealed both the source of the speedup variance among small requests (Section~\ref{sec:variance_analysis}) and the synchronous KV store path that dominates the penalty on cache misses (Section~\ref{sec:rec_miss_penalty}). Neither would have been visible from end-to-end TTFT measurements alone.
 
 \paragraph{Request logging and replay.}
 To support debugging and reproducible experimentation, the API server includes a request logging module. During a server session, all incoming requests and their corresponding responses are captured and stored as a local trace file.
@@ -143,7 +95,8 @@ In addition, the server supports a \textbf{replay} functionality that parses req
     \item A/B comparison of different caching configurations on identical workloads.
 \end{itemize}
 
-These capabilities are essential for the latency evaluation methodology in Chapter~\ref{cha:eval}. The replay mechanism lets us drive the backend with a fixed, deterministic trace under both blend and no-blend configurations, eliminating the variability that would otherwise come from re-running the agent loop end-to-end.
+\paragraph{Cache configurations.}
+The server can run the cache with blending or as a standard prefix cache, and the size of the CPU cache that holds KV state is set per run. The replay mechanism lets us drive the backend with a fixed, deterministic trace under every combination of mechanism and cache size, eliminating the variability that would otherwise come from re-running the agent loop end-to-end. This is the basis of the case study in Chapter~\ref{cha:eval}.
 
 \section{Frontend Integration Details}
 \label{sec:design_frontend_impl}
