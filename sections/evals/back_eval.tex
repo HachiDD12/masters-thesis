@@ -1,17 +1,17 @@
 \chapter{Evaluation}
 \label{cha:eval}
 
-This chapter presents the case study. Section~\ref{sec:ch2_eval} describes the trace, the cache configurations and the cache sizes we compare. Section~\ref{sec:cache_behavior} studies the cache's behavior on the trace: where the reuse comes from, how it changes with cache size, and what a reused chunk is worth in latency. Section~\ref{sec:recommendation} uses these results to ask when to blend and when to use prefix caching. Section~\ref{sec:ch1_eval} closes with the accuracy of the agent frontend across multiple LLM backends.
+In this chapter, we present the case study. Section~\ref{sec:ch2_eval} describes the trace, the cache configurations and the cache sizes we compare. Section~\ref{sec:cache_behavior} analyzes how the cache behaves on this trace under prefix caching and under blending. In Section~\ref{sec:recommendation}, we use these results to decide when each mechanism should be used. Finally, Section~\ref{sec:ch1_eval} evaluates the accuracy of the agent frontend across several LLM backends.
 
 \section{Setup}
 \label{sec:ch2_eval}
 
-We study the requests that the RepoGraph + Agentless frontend sends while working on SWE-bench issues, replayed against vLLM with LMCache through the replay mechanism described in Section~\ref{sec:request_logging}. Every configuration and cache size processes the identical trace.
+We record the requests that the RepoGraph + Agentless frontend sends while working on SWE-bench issues, and replay them against vLLM with LMCache using the replay mechanism from Section~\ref{sec:request_logging}. Every configuration and cache size is run on the same trace.
 
 \paragraph{Trace.}
-We replay the full set of prompts produced by RepoGraph + Agentless on SWE-bench Verified-mini \cite{MariusHobbhahn2025swe-bench-verified-mini}, which come from Django issues. The trace comprises 541 requests: 341 localization requests, 100 greedy repair requests, and 100 sampled repair requests that each ask for nine samples. Localization accounts for 67\% of the trace's prompt tokens, greedy repair for 18\%, and sampled repair for 15\%. Across all requests, the prompts contain 4.1 million distinct tokens, which we call the trace's \emph{working set}.
+We replay all prompts produced by RepoGraph + Agentless on SWE-bench Verified-mini \cite{MariusHobbhahn2025swe-bench-verified-mini}, which come from Django issues. The trace has 541 requests: 341 localization requests, 100 greedy repair requests, and 100 sampled repair requests, each of which asks for nine samples. Localization makes up 67\% of the prompt tokens in the trace, greedy repair 18\%, and sampled repair 15\%. We define the \emph{working set} of the trace as the KV cache that a cache of unlimited size would hold after the whole trace is replayed, with each distinct chunk (as blending splits the prompts) stored once. The working set has 4.1 million tokens. Each token takes 40\,KiB of KV cache on each GPU worker, so the working set is 157\,GiB per worker.
 
-Figure~\ref{fig:length_dist} shows how request length is distributed across the trace. Half the requests fall between 1{,}792 and 6{,}978 tokens, the median is 5{,}042, and a thin tail extends to 119{,}808.
+Figure~\ref{fig:length_dist} shows the distribution of request lengths. The median request has 5{,}042 tokens, half of the requests are between 1{,}792 and 6{,}978 tokens long, and a few requests reach up to 119{,}808 tokens.
 
 \begin{figure}[H]
 \centering
@@ -23,28 +23,28 @@ Figure~\ref{fig:length_dist} shows how request length is distributed across the 
 \end{figure}
 
 \paragraph{Model and hardware.}
-All experiments use Devstral Small, which is also the open-source model used in the accuracy evaluation (Section~\ref{sec:ch1_eval}), served with 4-way tensor parallelism on four NVIDIA L40S GPUs.
+We use Devstral Small in all experiments, which is also the open-source model in the accuracy evaluation (Section~\ref{sec:ch1_eval}). The model is served with 4-way tensor parallelism on four NVIDIA L40S GPUs.
 
 \paragraph{Configurations.}
 We compare two ways of reusing KV state across requests, both implemented in LMCache:
 \begin{itemize}
-    \item \textbf{Prefix caching} (baseline): the cache reuses KV state only for 1{,}024-token chunks that match from the start of the prompt, the technique used by serving engines such as vLLM and SGLang.
-    \item \textbf{Blend}: CacheBlend reuses each chunk of at least 256 tokens wherever it appears in the prompt and recomputes a fraction of the tokens, set to 15\%, to repair the reused state.
+    \item \textbf{Prefix caching} (baseline): KV state is reused in 1{,}024-token chunks, and only for chunks that match from the start of the prompt. This is the technique used by serving engines such as vLLM and SGLang.
+    \item \textbf{Blend}: CacheBlend reuses any chunk of at least 256 tokens, wherever it appears in the prompt, and recomputes a fraction of the tokens (the \emph{recompute ratio}, set to 15\%) to repair the reused state.
 \end{itemize}
-vLLM's own prefix cache is disabled in both, so LMCache's CPU cache is the only place KV state is reused from. We run each configuration with five sizes of that cache per GPU worker: 40\,GiB, which holds a quarter of the working set, and 10\%, 5\%, 2\% and 1\% of the working set (15.7, 7.85, 3.14 and 1.57\,GiB).
+In both configurations, we disable vLLM's own prefix cache, so KV state is only reused from LMCache's CPU cache. We run each configuration with five sizes of this cache per GPU worker: 1\%, 2\%, 5\% and 10\% of the working set (1.57, 3.14, 7.85 and 15.7\,GiB), and 40\,GiB, which holds a quarter of the working set.
 
 \paragraph{Metrics.}
-We adopt TTFT as our primary latency metric, defined as the elapsed time from request arrival to the emission of the first output token. TTFT directly captures the prefill-phase cost, which is the phase that cache reuse is designed to accelerate. For each request, we compute the \emph{TTFT speedup} as the ratio of its TTFT under prefix caching to its TTFT under blending. A speedup greater than 1.0 indicates that blending reduced prefill latency; a value below 1.0 indicates that it added latency. For a request that asks for several samples, TTFT is the time to the first token of the first sample. We measure reuse by the \emph{cache hit ratio}, the share of prompt tokens served from the cache rather than recomputed, summed over the requests in question. The runs were spread over nodes of slightly different speed, so we scale each run's TTFT by its median ratio to a reference run over the requests that no configuration hits.
+We use TTFT as our main latency metric. TTFT is the time from when a request arrives until the first output token is produced. It directly reflects the cost of the prefill phase, which is the phase that cache reuse speeds up. For a request that asks for several samples, TTFT is the time until the first token of the first sample. For each request, we define the \emph{TTFT speedup} as its TTFT under prefix caching divided by its TTFT under blending. A speedup above 1.0 means that blending made prefill faster, and a speedup below 1.0 means that it made prefill slower. To measure reuse, we use the \emph{cache hit ratio}, which is the fraction of prompt tokens loaded from the cache instead of recomputed, counted over all requests in the group we look at. Since the runs were spread over nodes with slightly different speeds, we normalize the TTFT of each run by its median ratio to a reference run, computed over the requests that no configuration hits.
 
 \section{Cache Behavior}
 \label{sec:cache_behavior}
 
-This section follows the trace's reuse from where it arises to what it is worth: which requests reuse cached state under each mechanism, how that changes as the cache shrinks, and how much faster a request runs when blending reuses part of it.
+In this section, we first look at which requests reuse cached state under each mechanism (Section~\ref{sec:cb_where}) and how this changes as the cache gets smaller (Section~\ref{sec:cb_size}). We then measure how much faster a request runs when blending reuses part of its prompt (Sections~\ref{sec:cb_worth} and~\ref{sec:cb_size_value}).
 
 \subsection{Where the Reuse Comes From}
 \label{sec:cb_where}
 
-Figure~\ref{fig:hit_by_stage} breaks the cache hit ratio down by the stage of the agent that sent each request, at every cache size.
+Figure~\ref{fig:hit_by_stage} shows the cache hit ratio at each cache size, broken down by the agent stage that sent the request.
 
 \begin{figure}[H]
 \centering
@@ -55,16 +55,16 @@ Figure~\ref{fig:hit_by_stage} breaks the cache hit ratio down by the stage of th
  \vspace{-0.15in}
 \end{figure}
 
-Most of the trace's reuse is exact repetition. Each sampled repair request re-sends the greedy repair prompt that came just before it, so both mechanisms serve 99.6\% of sampled repair tokens from the cache at every size down to 2\% of the working set. Since sampled repair makes up 15\% of the trace's prompt tokens, these repeats account for nearly all of prefix caching's 14.7\% hit ratio over the whole trace.
+We find that most of the reuse in the trace comes from exact repeats. Each sampled repair request re-sends the greedy repair prompt right before it, so both mechanisms load 99.6\% of sampled repair tokens from the cache at every size from 2\% of the working set up. Sampled repair makes up 15\% of the prompt tokens in the trace, so these repeats explain almost all of prefix caching's 14.7\% hit ratio over the whole trace.
 
-Blending adds reuse in one stage only: localization, which makes up two thirds of the trace's prompt tokens. Prefix caching reuses none of it, while blending serves 5.8\% of localization tokens from the cache with the largest cache, which raises the trace-wide hit ratio from 14.7\% to 18.6\%. Every localization hit has the same shape. The first few hundred tokens of the prompt, which hold the request's own issue text, miss, and a single block of several thousand tokens that follows them hits in full. Localization prompts for different issues share that block, but because it never starts the prompt, prefix caching cannot reuse it. This is the layout case described in Section~\ref{sec:design_cc}.
+Blending adds reuse in only one stage, localization, which makes up two thirds of the prompt tokens in the trace. Prefix caching does not reuse any localization tokens. With the largest cache, blending loads 5.8\% of them from the cache, which raises the hit ratio over the whole trace from 14.7\% to 18.6\%. All localization hits follow the same pattern. The first few hundred tokens of the prompt, which contain the request's own issue text, miss in the cache, and the block of several thousand tokens that comes after them hits in full. Localization prompts for different issues share this block, but since it never appears at the start of the prompt, prefix caching cannot reuse it. This is the prompt layout we described in Section~\ref{sec:design_cc}.
 
-Greedy repair requests share no reusable content with earlier requests under either mechanism.
+Greedy repair requests do not share any reusable content with earlier requests, so neither mechanism gets hits on them.
 
 \subsection{Cache Size}
 \label{sec:cb_size}
 
-Figure~\ref{fig:hit_vs_size} shows how the trace-wide hit ratio changes as the cache shrinks from 40\,GiB, a quarter of the working set, to 1\% of it. The two kinds of reuse respond very differently.
+Figure~\ref{fig:hit_vs_size} shows how the hit ratio over the whole trace changes with cache size, from 1\% of the working set up to 40\,GiB (a quarter of the working set). Exact repeats and blending's extra hits react to a smaller cache in very different ways.
 
 \begin{figure}[H]
 \centering
@@ -75,41 +75,41 @@ Figure~\ref{fig:hit_vs_size} shows how the trace-wide hit ratio changes as the c
  \vspace{-0.15in}
 \end{figure}
 
-An exact repeat is reused by the very next request, so it survives in even a small cache: prefix caching's hit ratio stays at 14.7\% from 40\,GiB down to 2\% of the working set. Blending's extra hits come from localization prompts that are reused long after they are stored, once many other requests have passed through the cache, so they are the first to be evicted as the cache shrinks. Blending's hit ratio holds at 18.4\% down to 5\% of the working set, then falls to 17.5\% at 2\% and 14.5\% at 1\%, and the number of localization requests it hits falls from 45 to 18 over the same range.
+An exact repeat is reused by the very next request, so it stays in the cache even when the cache is small. As a result, prefix caching's hit ratio stays at 14.7\% at every size from 2\% of the working set up to 40\,GiB. Blending's extra hits, on the other hand, come from localization prompts that are reused long after they are stored, after many other requests have gone through the cache. These entries are therefore the first to be evicted when the cache shrinks. Blending's hit ratio is 14.5\% at 1\% of the working set and 17.5\% at 2\%, and stays between 18.4\% and 18.6\% from 5\% up. Out of the 45 localization requests that blending hits at some cache size, only 18 still hit at 1\%.
 
-At 1\% of the working set, prefix caching also loses part of its exact repeats, and its hit ratio falls to 10.9\%. LMCache evicts the oldest chunks of a prompt first, which are its leading chunks, and prefix caching must match a prompt from its first chunk, so a repeat whose leading chunks have been evicted cannot be reused at all. Blending looks chunks up individually and still reuses the ones that survive: at 1\% it serves 86\% of sampled repair tokens from the cache, against 74\% for prefix caching. As a result, blending's lead over prefix caching narrows from 3.7 to 2.8 percentage points between 5\% and 2\% of the working set, then widens again to 3.6 points at 1\%.
+At 1\% of the working set, prefix caching starts to lose some of its exact repeats as well, and its hit ratio drops to 10.9\%. This is because LMCache evicts the oldest chunks of a prompt first, which are the chunks at the start of the prompt. Since prefix caching has to match a prompt from its first chunk, a repeat whose first chunks have been evicted cannot be reused at all. Blending looks up each chunk separately and can still reuse the chunks that remain in the cache. At 1\%, it loads 86\% of sampled repair tokens from the cache, compared to 74\% for prefix caching. As a result, blending's advantage over prefix caching is 3.6 percentage points at 1\% of the working set, drops to 2.8 points at 2\%, and rises again to 3.7 points at 5\%.
 
 \subsection{What a Hit Is Worth}
 \label{sec:cb_worth}
 
-We now turn from how often blending hits to what a hit is worth. Figure~\ref{fig:speedup_delta} plots, for each single-sample request at a cache size of 5\% of the working set, the TTFT speedup of blending over prefix caching against the request's hit-ratio gain $\delta$: the share of its prompt that blending serves from the cache, minus the share that prefix caching serves. Prefix caching hits none of these requests, so $\delta$ is simply blending's hit ratio.
+So far we have looked at how often blending hits. We now look at how much a hit speeds up a request. Figure~\ref{fig:speedup_delta} plots the TTFT speedup of blending over prefix caching for each localization and greedy repair request, with a cache size of 5\% of the working set. The x-axis is the request's hit-ratio gain $\delta$, which is the fraction of its prompt that blending loads from the cache minus the fraction that prefix caching loads. Since prefix caching does not hit any of these requests, $\delta$ is equal to blending's hit ratio.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.6\linewidth]{graphs/case_study/speedup_vs_delta_5pct.pdf}
 \vspace{-0.1in}
-  \caption{\small TTFT speedup of blending over prefix caching against hit-ratio gain $\delta$, for single-sample requests at a cache size of 5\% of the working set, with the cost model of Equation~\ref{eq:blend_cost}.}
+  \caption{\small TTFT speedup of blending over prefix caching against hit-ratio gain $\delta$, for localization and greedy repair requests at a cache size of 5\% of the working set, with the cost model of Equation~\ref{eq:blend_cost}.}
  \label{fig:speedup_delta}
  \vspace{-0.15in}
 \end{figure}
 
-The 400 requests that blending does not hit run at prefix-caching speed (median 1.00$\times$). For the 40 that it hits, speedup rises with $\delta$ and then levels off, at a median of 4.35$\times$. The shape follows from how blending repairs reused state. It recomputes every token it could not reuse, and tops the recomputed set up to a fixed fraction $r$ of the prompt, the recompute ratio, with tokens selected from the reused chunks. Each blend also pays a fixed cost $c$ to load and process the cached state. Relative to computing the whole prompt, the cost of a request is therefore
+The 400 requests that blending does not hit run at the same speed as under prefix caching (median 1.00$\times$). For the 40 requests that it hits, the speedup first increases with $\delta$ and then flattens out, with a median of 4.35$\times$. This shape comes from how blending repairs the reused state. Blending recomputes every token that it could not reuse. If these tokens make up less than a fixed fraction $r$ of the prompt (the recompute ratio), it also recomputes tokens selected from the reused chunks until it reaches $r$. Each blend also has a fixed cost $c$ for loading and processing the cached state. Relative to computing the whole prompt from scratch, the cost of a request is therefore
 \begin{equation}
 \label{eq:blend_cost}
 \frac{1}{S(\delta)} = \max(1-\delta,\ r) + c,
 \end{equation}
-where $S$ is the speedup. Fitting this to the 40 hits gives $r = 0.14$, close to the configured recompute ratio of 0.15, and $c = 0.086$. Once $\delta$ exceeds $1-r$, the reused chunks cover more of the prompt than the recompute floor lets blending skip, and further reuse buys nothing: the speedup is capped at $1/(r+c) \approx 4.4\times$, and 26 of the 40 hits sit on this plateau. The recompute ratio, not the hit ratio, sets the payoff of a localization hit.
+where $S$ is the speedup. Fitting this model to the 40 hits gives $r = 0.14$, which is close to the configured recompute ratio of 0.15, and $c = 0.086$. When $\delta$ is larger than $1-r$, blending still has to recompute a fraction $r$ of the prompt, so reusing more of the prompt no longer reduces the cost. The speedup is then capped at $1/(r+c) \approx 4.4\times$, and 26 of the 40 hits are on this plateau. In other words, for most localization hits the speedup is limited by the recompute ratio rather than by how much of the prompt is reused.
 
 \subsection{What Cache Size Changes}
 \label{sec:cb_size_value}
 
-Figure~\ref{fig:speedup_delta_grid} repeats this comparison at every cache size, and Figure~\ref{fig:localize_paired} follows the 45 localization requests that blending hits at some cache size across all five sizes.
+Figure~\ref{fig:speedup_delta_grid} shows the same comparison for the localization requests at every cache size. Figure~\ref{fig:localize_paired} tracks the 45 localization requests that blending hits at some cache size across all five sizes.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{graphs/case_study/speedup_vs_delta_grid_prefix.pdf}
 \vspace{-0.1in}
-  \caption{\small TTFT speedup of blending over prefix caching against hit-ratio gain, for single-sample requests, at each cache size.}
+  \caption{\small TTFT speedup of blending over prefix caching against hit-ratio gain, for localization requests, at each cache size.}
  \label{fig:speedup_delta_grid}
  \vspace{-0.15in}
 \end{figure}
@@ -123,12 +123,12 @@ Figure~\ref{fig:speedup_delta_grid} repeats this comparison at every cache size,
  \vspace{-0.15in}
 \end{figure}
 
-The speedup curve is the same at every size: the median speedup of the requests that blending hits stays between 4.0$\times$ and 4.6$\times$ from 40\,GiB down to 1\% of the working set. What a smaller cache changes is how many requests hit. Of the 45 localization requests, 42 still hit at 10\% of the working set, 40 at 5\%, 29 at 2\%, and 18 at 1\%. A request that loses its hit does not become slower than under prefix caching; it falls back to prefix-caching speed, with a median of 1.00$\times$ at every size. Shrinking the cache therefore removes blending's gains one request at a time, without adding cost to the requests that lose them.
+The speedup curve looks the same at every cache size. The median speedup of the requests that blending hits stays between 4.0$\times$ and 4.6$\times$ from 1\% of the working set up to 40\,GiB. What changes with a smaller cache is the number of requests that hit. Of the 45 localization requests, 18 hit at 1\% of the working set, 29 at 2\%, 40 at 5\%, 42 at 10\%, and all 45 at 40\,GiB. A request that loses its hit is not slower than under prefix caching. It simply runs at prefix-caching speed, with a median speedup of 1.00$\times$ at every size. So as the cache shrinks, blending loses its gains gradually, one request at a time, but the requests that lose their hits do not get any slower.
 
 \subsection{Beyond Django}
 \label{sec:cb_other_repos}
 
-The trace studied here comes from a single repository, and how much reuse blending finds depends on the workload: how often the agent's tasks share repository context, how long that context is, and how far apart the tasks that share it arrive. A simulator that replays a trace through the cache's lookup and eviction policy reproduces the measured hit ratios of both mechanisms at every cache size from 2\% of the working set upward, which lets us extend the study to traces from other repositories without serving them.
+The trace we study comes from a single repository. How much reuse blending can find depends on the workload, for example on how often the agent's tasks share repository context, how long that context is, and how far apart in time the tasks that share it arrive. To study other repositories without serving their traces, we built a simulator that replays a trace through the cache's lookup and eviction policy. The simulator reproduces the measured hit ratios of both mechanisms at every cache size from 2\% of the working set upward.
 
 \mytodo{Run the simulator on agent traces from repositories larger and smaller than Django. Report how the gap between blending and prefix caching, and its sensitivity to cache size, vary with the workload, and whether repository size or another factor (for example, how often tasks share a base commit, or the prompt layout) decides when blending has more to reuse.}
 

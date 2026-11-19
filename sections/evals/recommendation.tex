@@ -1,14 +1,14 @@
 \section{Case Study: Blend or Prefix?}
 \label{sec:recommendation}
 
-The results above show that neither mechanism is better for every request. Blending serves localization hits about four times faster than prefix caching. For exact repeats the order is reversed: prefix caching simply loads the stored state of the earlier prompt, while blending also recomputes part of it, as it does for every hit, even though nothing in the prompt has moved. Applied to every request, the two come out even: at 5\% of the working set, the mean TTFT over the whole trace is 2.10\,s under either mechanism (Table~\ref{tab:routing}). This raises a practical question: can each request be sent to the mechanism that serves it best?
+The results above show that neither mechanism is the better choice for every request. For localization hits, blending is about four times faster than prefix caching. For exact repeats, however, prefix caching is faster. It simply loads the stored state of the earlier prompt, while blending still recomputes part of it, as it does for every hit, even though nothing in the prompt has moved. When every request uses the same mechanism, the two end up with the same overall latency: at 5\% of the working set, the mean TTFT over the whole trace is 2.10\,s under both mechanisms (Table~\ref{tab:routing}). This leads to a practical question: can we send each request to the mechanism that serves it best?
 
 \subsection{Routing by Reuse Type}
 \label{sec:rec_controller}
 
-The two kinds of reuse are easy to tell apart before a request is served. An exact repeat sends a prompt the cache has already seen in full. In the agent we study, every sampled repair request repeats the greedy repair prompt sent just before it, and the agent knows this when it sends the request. A router can therefore send exact repeats to prefix caching and every other request to blending. The signal does not have to come from the agent: the serving engine can also recognize an exact repeat by comparing a hash of the whole prompt against the prompts it has already stored.
+The two kinds of reuse are easy to tell apart before a request is served. An exact repeat sends a prompt that the cache has already seen in full. In our agent, every sampled repair request repeats the greedy repair prompt sent right before it, and the agent knows this when it sends the request. A router can therefore send exact repeats to prefix caching and all other requests to blending. This information does not have to come from the agent. The serving engine can also detect an exact repeat by comparing a hash of the whole prompt with the hashes of the prompts it has already stored.
 
-Table~\ref{tab:routing} compares this routing policy with serving every request through a single mechanism, at 5\% and 2\% of the working set. Routing is faster than either mechanism alone at both sizes: 3.3\% faster than the better single mechanism at 5\% of the working set, and 2.7\% faster at 2\%. It also comes within 0.4\% of the best possible per-request choice, which serves each request with whichever mechanism was faster for it. Nearly all of the benefit of choosing per request is captured by a rule that only needs to know whether the prompt is an exact repeat.
+Table~\ref{tab:routing} compares this routing policy with using a single mechanism for every request, at 2\% and 5\% of the working set. At both sizes, routing is faster than either mechanism on its own. It is 2.7\% faster than the better single mechanism at 2\% of the working set, and 3.3\% faster at 5\%. It is also within 0.4\% of the best possible per-request choice, where each request is served by whichever mechanism was faster for it. This means that a simple rule, which only needs to know whether a prompt is an exact repeat, gets almost all of the benefit of choosing the mechanism per request.
 
 \begin{table}[H]
   \centering
@@ -17,21 +17,21 @@ Table~\ref{tab:routing} compares this routing policy with serving every request 
     \toprule
     & & \multicolumn{2}{c}{Mean TTFT (s)} \\
     \cmidrule(l){3-4}
-    Policy & Rule & 5\% cache & 2\% cache \\
+    Policy & Rule & 2\% cache & 5\% cache \\
     \midrule
-    Prefix caching   & every request uses prefix caching                 & 2.102 & 2.103 \\
-    Blend            & every request uses blending                       & 2.095 & 2.112 \\
-    \textbf{Routed}  & exact repeats $\rightarrow$ prefix; the rest $\rightarrow$ blend & \textbf{2.027} & \textbf{2.046} \\
-    Best per request & the faster of the two, chosen per request         & 2.024 & 2.039 \\
+    Prefix caching   & every request uses prefix caching                 & 2.103 & 2.102 \\
+    Blend            & every request uses blending                       & 2.112 & 2.095 \\
+    \textbf{Routed}  & exact repeats $\rightarrow$ prefix; the rest $\rightarrow$ blend & \textbf{2.046} & \textbf{2.027} \\
+    Best per request & the faster of the two, chosen per request         & 2.039 & 2.024 \\
     \bottomrule
   \end{tabular}
-  \caption{\small Mean TTFT over the trace under each routing policy. The routed and best-per-request rows take each request's TTFT from the run of the mechanism the policy chooses for it.}
+  \caption{\small Mean TTFT over the trace under each routing policy. For the routed and best-per-request rows, each request's TTFT is taken from the run of the mechanism that the policy picks for it.}
   \label{tab:routing}
 \end{table}
 
 \subsection{Measured Routing}
 \label{sec:rec_measured}
 
-The routed results above combine per-request measurements from the prefix-caching and blending runs. A routed implementation serves both kinds of request in the same run, so a single cache holds the state of both mechanisms at once and their entries compete for the same capacity.
+The routed results above are computed by combining per-request measurements from the separate prefix caching and blending runs. In an actual implementation of routing, both kinds of requests are served in the same run. A single cache then holds the KV state of both mechanisms, and their entries compete for the same space.
 
 \mytodo{Implement routing by reuse type and run it on the trace at 5\% (and possibly 2\%) of the working set. Report the measured mean TTFT and hit ratios against Table~\ref{tab:routing}, to confirm that the estimated gain holds when both mechanisms share one cache.}
