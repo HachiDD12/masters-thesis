@@ -5,8 +5,8 @@ This chapter describes the system used in our case study. Section~\ref{sec:desig
 
 \section{Cached Context}
 \label{sec:design_cc}
-
-Cached Context is a way of organizing prompts
+\rashmi{This goes after measurement infrastructure}
+Cached Context \rashmi{This terms is confusing. Use something along the lines of boundary identification} is a way of organizing prompts
 % \rashmi{This is basically how to chunk the gathered context, is it not? Is this a new concept or an existing one? Add references to this. If it is new, we need to chat about how to update the writing about this, we should consider bringing it up more clearly in intro for example. But then we will also have to have an evaluation to show the benefits and how exactly we do, that is at least a discussion on different approaches to do it. We will need a longer discussion on this. Let us discuss in our next meeting.}
 % [ADDRESSED, for Rashmi to confirm] Reframed as how CacheBlend's chunk model is applied to agent prompts (not a new caching mechanism); the paragraph on prompt layout below ties it to the measured reuse in Section~\ref{sec:cb_where}.
 rather than a new caching mechanism. The idea is to split each prompt into chunks along context objects, where a context object is a code snippet with a symbol definition, a repository structure tree, or another self-contained piece of context. The caching itself is done by the backend. It looks up each chunk by its content, and when a chunk is reused at a different offset, it corrects the chunk's positional encoding. A cached chunk can therefore be reused wherever it appears in later prompts, which is what we call \emph{position-independent caching}.
@@ -20,6 +20,7 @@ The layout of the prompt also matters. Since prefix caching only reuses content 
 \section{System Architecture}
 \label{sec:design_arch}
 
+\rashmi{This needs to come first.}
 Figure~\ref{fig:system_arch} shows the overall architecture. We kept the design modular, so that each component can be developed and tested on its own. The rest of this section describes the backend first and then the frontend.
 
 \begin{figure}[H]

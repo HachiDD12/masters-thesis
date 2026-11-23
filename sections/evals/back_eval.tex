@@ -98,6 +98,7 @@ The 400 requests that blending does not hit run at the same speed as under prefi
 \label{eq:blend_cost}
 \frac{1}{S(\delta)} = \max(1-\delta,\ r) + c,
 \end{equation}
+\mytodo{drop equation \& curve fitting, but keep explanation for ceiling based on recomp ratio}
 where $S$ is the speedup. Fitting this model to the 40 hits gives $r = 0.14$, which is close to the configured recompute ratio of 0.15, and $c = 0.086$. When $\delta$ is larger than $1-r$, blending still has to recompute a fraction $r$ of the prompt, so reusing more of the prompt no longer reduces the cost. The speedup is then capped at $1/(r+c) \approx 4.4\times$, and 26 of the 40 hits are on this plateau. In other words, for most localization hits the speedup is limited by the recompute ratio rather than by how much of the prompt is reused.
 
 \subsection{What Cache Size Changes}
